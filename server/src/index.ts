@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from 'fs';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
@@ -53,8 +53,13 @@ app.post('/api/check-hotspots', async (_req, res) => {
   }
 });
 
-// 静态文件托管（前端）
-const clientDistPath = path.resolve(process.cwd(), '../client/dist');
+// 静态文件托管（前端）- 自动检测路径
+const possiblePaths = [
+  path.resolve(process.cwd(), '../client/dist'),
+  path.resolve(process.cwd(), '../dist'),
+  path.resolve(process.cwd(), 'dist')
+];
+const clientDistPath = possiblePaths.find(p => fs.existsSync(path.join(p, 'index.html'))) || possiblePaths[0];
 app.use(express.static(clientDistPath));
 
 // SPA 回退：非 API 路由返回 index.html
