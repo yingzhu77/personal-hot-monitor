@@ -17,6 +17,12 @@ interface SourceCheckResult {
   failed: boolean;
 }
 
+// 批量分析队列
+const analysisQueue: { itemId: string; io?: Server }[] = [];
+let analysisProcessing = false;
+const ANALYSIS_BATCH_SIZE = 2;
+const ANALYSIS_BATCH_DELAY_MS = 5000;
+
 // Maximum feed items to keep (configurable via env)
 function getMaxFeedItems(): number {
   const parsed = Number(process.env.MAX_FEED_ITEMS);
@@ -215,11 +221,28 @@ async function runWithConcurrency<T, R>(
 }
 
 function queueAnalysis(itemId: string, io?: Server): void {
-  setTimeout(() => {
-    void analyzeAndNotify(itemId, io).catch(error => {
+  analysisQueue.push({ itemId, io });
+  if (!analysisProcessing) {
+    processAnalysisQueue();
+  }
+}
+
+async function processAnalysisQueue(): Promise<void> {
+  if (analysisProcessing || analysisQueue.length === 0) return;
+  analysisProcessing = true;
+
+  while (analysisQueue.length > 0) {
+    const { itemId, io } = analysisQueue.shift()!;
+    await analyzeAndNotify(itemId, io).catch(error => {
       console.error(`[GamePulse] analysis failed for item ${itemId}`, error);
     });
-  }, 0);
+    // 逐条延迟避免 API 限流
+    if (analysisQueue.length > 0) {
+      await new Promise(r => setTimeout(r, ANALYSIS_BATCH_DELAY_MS));
+    }
+  }
+
+  analysisProcessing = false;
 }
 
 async function analyzeAndNotify(itemId: string, io?: Server): Promise<void> {

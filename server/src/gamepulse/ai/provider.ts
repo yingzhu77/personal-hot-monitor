@@ -216,7 +216,7 @@ function normalizeAnalysis(value: Partial<NormalizedAnalysis>): NormalizedAnalys
   };
 }
 
-function fallbackAnalysis(input: LLMAnalyzeInput): NormalizedAnalysis {
+export function fallbackAnalysis(input: LLMAnalyzeInput): NormalizedAnalysis {
   const text = `${input.title}\n${input.content}`.toLowerCase();
   const signals = findLowValueSignals(text);
   const isLow = signals.length > 0;

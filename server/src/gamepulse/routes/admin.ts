@@ -187,26 +187,32 @@ export function createAdminRouter(io: Server): Router {
       // 立即返回任务开始
       res.json({ total: items.length, status: 'started' });
 
-      // 后台执行重新分类
+      // 后台逐条执行重新分类，带延迟避免限流
       let analyzed = 0;
       let failed = 0;
-      for (const item of items) {
+      const ITEM_DELAY = 3000;
+      for (let i = 0; i < items.length; i++) {
         try {
-          await ensureAnalysis(item, { force: true });
+          await ensureAnalysis(items[i], { force: true });
           analyzed++;
         } catch (error) {
-          console.error(`[Reanalyze] Failed for item ${item.id}:`, error);
+          console.error(`[Reanalyze] Failed for item ${items[i].id}:`, error);
           failed++;
         }
 
-        // 每处理 10 条推送一次进度
-        if (analyzed % 10 === 0 || analyzed + failed === items.length) {
+        // 每 5 条推送进度
+        if ((analyzed + failed) % 5 === 0 || analyzed + failed === items.length) {
           io.emit('reanalyze:progress', {
             total: items.length,
             analyzed,
             failed,
             percent: Math.round(((analyzed + failed) / items.length) * 100)
           });
+        }
+
+        // 逐条延迟避免 API 限流
+        if (i < items.length - 1) {
+          await new Promise(r => setTimeout(r, ITEM_DELAY));
         }
       }
 

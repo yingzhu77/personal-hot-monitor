@@ -1,6 +1,12 @@
 import type { FeedItem, Source } from '@prisma/client';
 import { prisma } from '../../db.js';
-import { analyzeWithProvider } from './provider.js';
+import { analyzeWithProvider, fallbackAnalysis } from './provider.js';
+
+// 内容预筛：太短的内容跳过 AI，直接用规则
+function shouldSkipAI(item: FeedItem & { source: Source }): boolean {
+  const text = `${item.title} ${item.content}`.trim();
+  return text.length < 15;
+}
 
 export async function ensureAnalysis(item: FeedItem & { source: Source }, options: { force?: boolean } = {}): Promise<void> {
   const existing = await prisma.analysis.findUnique({
@@ -20,6 +26,38 @@ export async function ensureAnalysis(item: FeedItem & { source: Source }, option
       error: null
     }
   });
+
+  // 内容预筛：太短的内容跳过 AI
+  if (shouldSkipAI(item)) {
+    const fallback = fallbackAnalysis({
+      title: item.title,
+      content: item.content,
+      game: item.game,
+      sourceName: item.source.name,
+      sourceType: item.sourceType,
+      sourceIsOfficial: item.source.isOfficial,
+      itemKind: item.itemKind,
+      publishedAt: item.publishedAt
+    });
+    await prisma.analysis.update({
+      where: { feedItemId: item.id },
+      data: {
+        status: 'completed',
+        category: fallback.category,
+        importance: fallback.importance,
+        visibility: fallback.visibility,
+        confidence: fallback.confidence,
+        summary: fallback.summary,
+        reason: '内容过短，规则兜底分析',
+        dedupKeywords: '[]',
+        provider: 'rules',
+        model: 'fallback',
+        error: null,
+        analyzedAt: new Date()
+      }
+    });
+    return;
+  }
 
   try {
     const result = await analyzeWithProvider({
