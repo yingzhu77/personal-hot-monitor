@@ -88,8 +88,8 @@ function resolveProviderConfig(): ProviderConfig | null {
     return {
       provider: 'mimo',
       apiKey,
-      baseUrl: process.env.MIMO_BASE_URL || 'https://api.xiaomimimo.com/v1',
-      model: process.env.MIMO_MODEL || 'MiMo-V2.5-Flash'
+      baseUrl: process.env.MIMO_BASE_URL || 'https://token-plan-sgp.xiaomimimo.com/v1',
+      model: process.env.MIMO_MODEL || 'mimo-v2.5-flash'
     };
   }
 
