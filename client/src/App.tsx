@@ -99,8 +99,9 @@ function App() {
             />
           ) : (
             <InsightsPage
-              categoryCounts={publicData.facets.byCategory}
-              importanceCounts={publicData.facets.byImportance}
+              gameCategoryCounts={publicData.stats?.byCategory || {}}
+              followCategoryCounts={publicData.stats?.byFollowCategory || {}}
+              importanceCounts={publicData.stats?.byImportance || {}}
               hourlyTrend={publicData.stats?.hourlyTrend || []}
             />
           )}

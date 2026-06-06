@@ -102,6 +102,9 @@ export interface PublicStats {
   byKind: Record<string, number>;
   sourceHealth: Record<string, number>;
   hourlyTrend: Array<{ hour: string; count: number }>;
+  byCategory: Record<string, number>;
+  byFollowCategory: Record<string, number>;
+  byImportance: Record<string, number>;
 }
 
 export interface Paginated<T> {

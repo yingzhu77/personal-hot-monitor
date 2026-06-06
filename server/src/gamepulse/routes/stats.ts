@@ -4,6 +4,10 @@ import { publicVisibilityWhere, andWhere } from './helpers.js';
 
 const router = Router();
 
+// Category sets for grouping
+const GAME_INTELLIGENCE_CATEGORIES = new Set(['announcement', 'event', 'version', 'character', 'pv', 'game_music', 'community', 'other']);
+const FOLLOW_CATEGORIES = new Set(['music', 'trailer', 'movie_trailer', 'creator_video']);
+
 /**
  * GET /stats - 获取统计信息
  */
@@ -13,7 +17,7 @@ router.get('/stats', async (_req, res) => {
     today.setHours(0, 0, 0, 0);
     const publicWhere = publicVisibilityWhere();
 
-    const [total, todayCount, highCount, byGame, byKind, sourceHealth] = await Promise.all([
+    const [total, todayCount, highCount, byGame, byKind, sourceHealth, allAnalyses] = await Promise.all([
       prisma.feedItem.count({ where: publicWhere }),
       prisma.feedItem.count({ where: andWhere(publicWhere, { createdAt: { gte: today } }) }),
       prisma.feedItem.count({
@@ -34,8 +38,33 @@ router.get('/stats', async (_req, res) => {
       prisma.source.groupBy({
         by: ['healthStatus'],
         _count: { healthStatus: true }
+      }),
+      prisma.analysis.findMany({
+        where: { status: 'completed' },
+        select: { category: true, importance: true, feedItem: { select: { source: { select: { followed: true } } } } }
       })
     ]);
+
+    // Compute global category counts
+    const gameCategoryCounts: Record<string, number> = {};
+    const followCategoryCounts: Record<string, number> = {};
+    const importanceCounts: Record<string, number> = {};
+
+    for (const analysis of allAnalyses) {
+      const cat = analysis.category || 'other';
+      const importance = analysis.importance || 'low';
+      const isFollow = analysis.feedItem?.source?.followed === true;
+
+      if (isFollow && FOLLOW_CATEGORIES.has(cat)) {
+        followCategoryCounts[cat] = (followCategoryCounts[cat] || 0) + 1;
+      } else if (!isFollow && GAME_INTELLIGENCE_CATEGORIES.has(cat)) {
+        gameCategoryCounts[cat] = (gameCategoryCounts[cat] || 0) + 1;
+      }
+
+      // Normalize importance: urgent -> high
+      const normalizedImportance = importance === 'urgent' ? 'high' : importance;
+      importanceCounts[normalizedImportance] = (importanceCounts[normalizedImportance] || 0) + 1;
+    }
 
     // 计算近 24 小时的时间线数据
     const now = new Date();
@@ -68,7 +97,10 @@ router.get('/stats', async (_req, res) => {
       byGame: Object.fromEntries(byGame.map(item => [item.game, item._count.game])),
       byKind: Object.fromEntries(byKind.map(item => [item.itemKind, item._count.itemKind])),
       sourceHealth: Object.fromEntries(sourceHealth.map(item => [item.healthStatus, item._count.healthStatus])),
-      hourlyTrend: hourlyData
+      hourlyTrend: hourlyData,
+      byCategory: gameCategoryCounts,
+      byFollowCategory: followCategoryCounts,
+      byImportance: importanceCounts
     });
   } catch (error) {
     console.error('Game Pulse stats failed:', error);
