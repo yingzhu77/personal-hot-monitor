@@ -17,6 +17,51 @@ interface SourceCheckResult {
   failed: boolean;
 }
 
+// Maximum feed items to keep (configurable via env)
+function getMaxFeedItems(): number {
+  const parsed = Number(process.env.MAX_FEED_ITEMS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2000;
+}
+
+// Clean up old feed items when limit is exceeded
+async function cleanupOldItems(): Promise<number> {
+  const maxItems = getMaxFeedItems();
+  const currentCount = await prisma.feedItem.count({ where: { hidden: false } });
+
+  if (currentCount <= maxItems) return 0;
+
+  const excessCount = currentCount - maxItems;
+  console.log(`[GamePulse] Cleaning up ${excessCount} old items (limit: ${maxItems})`);
+
+  // Find oldest items to delete (keep newest)
+  const oldItems = await prisma.feedItem.findMany({
+    where: { hidden: false },
+    orderBy: { createdAt: 'asc' },
+    take: excessCount,
+    select: { id: true }
+  });
+
+  if (oldItems.length === 0) return 0;
+
+  // Delete associated analyses first
+  await prisma.analysis.deleteMany({
+    where: { feedItemId: { in: oldItems.map(i => i.id) } }
+  });
+
+  // Delete associated notifications
+  await prisma.notification.deleteMany({
+    where: { feedItemId: { in: oldItems.map(i => i.id) } }
+  });
+
+  // Delete the items
+  const deleteResult = await prisma.feedItem.deleteMany({
+    where: { id: { in: oldItems.map(i => i.id) } }
+  });
+
+  console.log(`[GamePulse] Deleted ${deleteResult.count} old items`);
+  return deleteResult.count;
+}
+
 export async function runGamePulseCheck(io?: Server): Promise<CheckResult> {
   const sources = await prisma.source.findMany({
     where: { enabled: true },
@@ -24,6 +69,9 @@ export async function runGamePulseCheck(io?: Server): Promise<CheckResult> {
   });
 
   const results = await runWithConcurrency(sources, getSourceCheckConcurrency(), source => checkSource(source, io));
+
+  // Cleanup old items after check
+  const deletedCount = await cleanupOldItems();
 
   return {
     checkedSources: sources.length,
