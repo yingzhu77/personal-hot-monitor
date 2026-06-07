@@ -15,6 +15,9 @@ RUN cd client && npm ci
 COPY server/ ./server/
 COPY client/ ./client/
 
+# Generate Prisma client
+RUN cd server && npx prisma generate
+
 # Build server
 RUN cd server && npm run build
 
