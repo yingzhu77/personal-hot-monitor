@@ -5,6 +5,8 @@
 - **配置**: 阿里云 2核/2GB/Ubuntu 24.04
 - **区域**: 新加坡
 - **IP**: 8.219.121.132
+- **域名**: acg.yingzhu.xyz
+- **在线体验**: https://acg.yingzhu.xyz
 
 ---
 
