@@ -3,8 +3,25 @@
 ## 服务器信息
 
 - **系统**: Ubuntu 24.04
-- **配置**: 2核 CPU / 1GB 内存 / 30GB 磁盘
+- **配置**: 2核 CPU / 2GB 内存 / 30GB 磁盘（推荐）
 - **区域**: 新加坡
+- **域名**: acg.yingzhu.xyz
+
+## 一键部署（推荐）
+
+SSH 到服务器后执行：
+
+```bash
+curl -sL https://raw.githubusercontent.com/yingzhu77/personal-hot-monitor/master/auto-deploy.sh | bash
+```
+
+部署完成后：
+1. 访问 `http://服务器IP:3001`
+2. 登录管理后台（密码：acg2026）
+3. 在「B站 Cookie 配置」中填入 Cookie
+4. 重启服务
+
+## 手动部署
 
 ## 部署步骤
 
