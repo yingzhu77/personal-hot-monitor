@@ -75,3 +75,5 @@ docs/game-pulse-dedup-ranking-plan.zh.md
 docs/game-pulse-frontend-and-launch-plan.zh.md
 docs/next-session-handoff.md
 *.jpg
+deploy-package/
+acg-pulse-*.tar.gz
