@@ -16,6 +16,7 @@ COPY server/ ./server/
 COPY client/ ./client/
 
 # Generate Prisma client
+ENV DATABASE_URL=file:/app/server/data/prod.db
 RUN cd server && npx prisma generate
 
 # Build server
