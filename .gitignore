@@ -77,3 +77,4 @@ docs/next-session-handoff.md
 *.jpg
 deploy-package/
 acg-pulse-*.tar.gz
+save-cookie.sh

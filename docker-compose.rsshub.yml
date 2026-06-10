@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.rsshub
-    image: game-pulse-rsshub:latest
+    image: game-pulse-rsshub:2024.12.16
     container_name: game-pulse-rsshub
     restart: unless-stopped
     ports:
