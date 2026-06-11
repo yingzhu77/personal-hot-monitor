@@ -14,6 +14,7 @@ RUN cd client && npm ci
 # Copy source code
 COPY server/ ./server/
 COPY client/ ./client/
+COPY shared/ ./shared/
 
 # Generate Prisma client
 ENV DATABASE_URL=file:/app/server/data/prod.db

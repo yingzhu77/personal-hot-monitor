@@ -17,6 +17,7 @@ function getRandomUserAgent(): string {
 }
 
 // ===== Types =====
+// Keep in sync with shared/community.ts (client source of truth)
 
 export interface CommunityTopic {
   id: string;
@@ -61,7 +62,10 @@ async function fetchBilibiliGameRanking(): Promise<BilibiliVideo[]> {
       timeout: 10000
     });
     return resp.data.code === 0 ? (resp.data.data?.list || []).slice(0, 20) : [];
-  } catch { return []; }
+  } catch (err) {
+    console.error('[Community] Bilibili game ranking error:', (err as Error).message);
+    return [];
+  }
 }
 
 async function fetchBilibiliAnimeRanking(): Promise<BilibiliVideo[]> {
@@ -72,7 +76,10 @@ async function fetchBilibiliAnimeRanking(): Promise<BilibiliVideo[]> {
       timeout: 10000
     });
     return resp.data.code === 0 ? (resp.data.data?.list || []).slice(0, 20) : [];
-  } catch { return []; }
+  } catch (err) {
+    console.error('[Community] Bilibili anime ranking error:', (err as Error).message);
+    return [];
+  }
 }
 
 async function fetchBilibiliPopular(): Promise<BilibiliVideo[]> {
@@ -83,7 +90,10 @@ async function fetchBilibiliPopular(): Promise<BilibiliVideo[]> {
       timeout: 10000
     });
     return resp.data.code === 0 ? (resp.data.data?.list || []) : [];
-  } catch { return []; }
+  } catch (err) {
+    console.error('[Community] Bilibili popular error:', (err as Error).message);
+    return [];
+  }
 }
 
 async function fetchVideoHotComments(aid: number, limit = 5): Promise<BilibiliComment[]> {
@@ -94,7 +104,10 @@ async function fetchVideoHotComments(aid: number, limit = 5): Promise<BilibiliCo
       timeout: 10000
     });
     return resp.data.code === 0 ? (resp.data.data?.replies || []) : [];
-  } catch { return []; }
+  } catch (err) {
+    console.error(`[Community] Bilibili comments aid=${aid} error:`, (err as Error).message);
+    return [];
+  }
 }
 
 // ===== NGA API =====
@@ -552,8 +565,12 @@ function isDuplicate(title: string, seenTitles: Set<string>): boolean {
 
 // ===== Main Aggregation =====
 
-export async function aggregateCommunityTopics(): Promise<CommunityTopic[]> {
-  console.log('[Community] Fetching from Bilibili + NGA + Xiaoheihe...');
+export async function aggregateCommunityTopics(options?: {
+  existingIds?: Set<string>;
+}): Promise<CommunityTopic[]> {
+  const existingIds = options?.existingIds;
+  const existingCount = existingIds?.size ?? 0;
+  console.log(`[Community] Fetching from Bilibili + NGA + Xiaoheihe... (existing: ${existingCount})`);
 
   // Fetch all sources in parallel
   const [gameRanking, animeRanking, popular, ngaResults, xhhResults] = await Promise.allSettled([
@@ -567,8 +584,11 @@ export async function aggregateCommunityTopics(): Promise<CommunityTopic[]> {
   const topics: CommunityTopic[] = [];
   const seenTitles = new Set<string>();
 
+  // Track which existing topics were seen (for cleanup)
+  const seenExistingIds = new Set<string>();
+
   // === Bilibili topics ===
-  if (ngaResults.status === 'fulfilled' || gameRanking.status === 'fulfilled' || animeRanking.status === 'fulfilled' || popular.status === 'fulfilled') {
+  if (gameRanking.status === 'fulfilled' || animeRanking.status === 'fulfilled' || popular.status === 'fulfilled') {
     const allBiliVideos: BilibiliVideo[] = [];
     if (gameRanking.status === 'fulfilled') allBiliVideos.push(...gameRanking.value);
     if (animeRanking.status === 'fulfilled') allBiliVideos.push(...animeRanking.value);
@@ -588,46 +608,83 @@ export async function aggregateCommunityTopics(): Promise<CommunityTopic[]> {
     acgVideos.sort((a, b) => (b.stat?.view || 0) - (a.stat?.view || 0));
     const topVideos = acgVideos.slice(0, 12);
 
-    // Fetch comments in parallel (batches of 4)
-    const commentResults = await fetchCommentsParallel(topVideos.map(v => v.aid), 4, 5);
+    // Separate new vs existing videos
+    const newVideos: BilibiliVideo[] = [];
+    const existingVideos: BilibiliVideo[] = [];
+    for (const v of topVideos) {
+      const id = `bilibili-${v.aid}`;
+      if (existingIds?.has(id)) {
+        existingVideos.push(v);
+        seenExistingIds.add(id);
+      } else {
+        newVideos.push(v);
+      }
+    }
 
-    // Batch AI sentiment analysis for all comment sets
-    const allCommentTexts = commentResults.map(comments =>
-      comments.slice(0, 3).map(c => c.content?.message || '').filter(Boolean).join('\n')
-    );
-    const allSentiments = await aiSentimentBatch(allCommentTexts);
-
-    for (let i = 0; i < topVideos.length; i++) {
-      const video = topVideos[i];
-      const comments = commentResults[i];
-
-      if (comments.length === 0) continue;
-
-      const sentiment = allSentiments[i] || keywordSentiment(video.title);
-      const totalLikes = comments.reduce((sum, c) => sum + (c.like || 0), 0);
-      const topComment = comments.reduce((best, c) =>
-        (c.like || 0) > (best.like || 0) ? c : best, comments[0]);
-
-      const heatScore = calculateHeatScore(
-        { view: video.stat?.view, like: video.stat?.like, commentLikes: totalLikes },
-        video.pubdate || 0
+    // Only fetch comments + AI for NEW videos
+    if (newVideos.length > 0) {
+      const commentResults = await fetchCommentsParallel(newVideos.map(v => v.aid), 4, 5);
+      const allCommentTexts = commentResults.map(comments =>
+        comments.slice(0, 3).map(c => c.content?.message || '').filter(Boolean).join('\n')
       );
+      const allSentiments = await aiSentimentBatch(allCommentTexts);
 
+      for (let i = 0; i < newVideos.length; i++) {
+        const video = newVideos[i];
+        const comments = commentResults[i];
+        if (comments.length === 0) continue;
+
+        const sentiment = allSentiments[i] || keywordSentiment(video.title);
+        const totalLikes = comments.reduce((sum, c) => sum + (c.like || 0), 0);
+        const topComment = comments.reduce((best, c) =>
+          (c.like || 0) > (best.like || 0) ? c : best, comments[0]);
+
+        const heatScore = calculateHeatScore(
+          { view: video.stat?.view, like: video.stat?.like, commentLikes: totalLikes },
+          video.pubdate || 0
+        );
+
+        const title = video.title;
+        if (isDuplicate(title, seenTitles)) continue;
+
+        topics.push({
+          id: `bilibili-${video.aid}`,
+          title,
+          sentiment: sentiment.label,
+          sentimentScore: sentiment.score,
+          heatScore,
+          category: classifyTopic(`${title} ${video.desc || ''}`),
+          source: 'bilibili',
+          trend: [heatScore],
+          summary: topComment.content?.message?.slice(0, 120) || video.desc?.slice(0, 120) || title,
+          url: `https://www.bilibili.com/video/${video.bvid}`,
+          publishedAt: new Date(((video.pubdate || 0) > 0 ? video.pubdate! : Math.floor(Date.now() / 1000)) * 1000).toISOString()
+        });
+      }
+    }
+
+    // For existing videos, just update heat score (skip AI)
+    for (const video of existingVideos) {
       const title = video.title;
       if (isDuplicate(title, seenTitles)) continue;
+
+      const heatScore = calculateHeatScore(
+        { view: video.stat?.view, like: video.stat?.like },
+        video.pubdate || 0
+      );
 
       topics.push({
         id: `bilibili-${video.aid}`,
         title,
-        sentiment: sentiment.label,
-        sentimentScore: sentiment.score,
+        sentiment: 'neutral', // will be overwritten by DB merge
+        sentimentScore: 0,
         heatScore,
         category: classifyTopic(`${title} ${video.desc || ''}`),
         source: 'bilibili',
         trend: [heatScore],
-        summary: topComment.content?.message?.slice(0, 120) || video.desc?.slice(0, 120) || title,
+        summary: video.desc?.slice(0, 120) || title,
         url: `https://www.bilibili.com/video/${video.bvid}`,
-        publishedAt: new Date((video.pubdate || 0) * 1000).toISOString()
+        publishedAt: new Date(((video.pubdate || 0) > 0 ? video.pubdate! : Math.floor(Date.now() / 1000)) * 1000).toISOString()
       });
     }
   }
@@ -643,37 +700,68 @@ export async function aggregateCommunityTopics(): Promise<CommunityTopic[]> {
     // Fetch comments for top 15 posts (by reply count) for better sentiment analysis
     const topPosts = validPosts.sort((a, b) => (b.replies || 0) - (a.replies || 0)).slice(0, 15);
 
-    // Fetch NGA comments in parallel (batches of 5)
-    const ngaCommentResults = await fetchNgaCommentsParallel(topPosts.map(p => p.tid), 5);
-
-    // Batch AI analysis for NGA posts
-    const ngaTexts = topPosts.map((post, i) => {
-      const comments = ngaCommentResults[i];
-      if (comments.length > 0) {
-        return [post.subject, ...comments.slice(0, 3).map(c => c.content)].join('\n');
+    // Separate new vs existing
+    const newPosts: NgaPost[] = [];
+    const existingPosts: NgaPost[] = [];
+    for (const p of topPosts) {
+      const id = `nga-${p.tid}`;
+      if (existingIds?.has(id)) {
+        existingPosts.push(p);
+        seenExistingIds.add(id);
+      } else {
+        newPosts.push(p);
       }
-      return post.subject;
-    });
-    const ngaSentiments = await aiSentimentBatch(ngaTexts);
+    }
 
-    for (let i = 0; i < topPosts.length; i++) {
-      const post = topPosts[i];
+    // Only fetch comments + AI for NEW posts
+    if (newPosts.length > 0) {
+      const ngaCommentResults = await fetchNgaCommentsParallel(newPosts.map(p => p.tid), 5);
+      const ngaTexts = newPosts.map((post, i) => {
+        const comments = ngaCommentResults[i];
+        if (comments.length > 0) {
+          return [post.subject, ...comments.slice(0, 3).map(c => c.content)].join('\n');
+        }
+        return post.subject;
+      });
+      const ngaSentiments = await aiSentimentBatch(ngaTexts);
+
+      for (let i = 0; i < newPosts.length; i++) {
+        const post = newPosts[i];
+        const heatScore = calculateNgaHeatScore(post);
+        const comments = ngaCommentResults[i];
+        const sentiment = ngaSentiments[i] || keywordSentiment(post.subject);
+
+        topics.push({
+          id: `nga-${post.tid}`,
+          title: post.subject,
+          sentiment: sentiment.label,
+          sentimentScore: sentiment.score,
+          heatScore,
+          category: classifyTopic(post.subject),
+          source: 'nga',
+          trend: [heatScore],
+          summary: comments.length > 0
+            ? comments[0].content.slice(0, 100)
+            : `${post.replies} 条回复 · ${post.author}`,
+          url: `https://nga.178.com/read.php?tid=${post.tid}`,
+          publishedAt: new Date((post.postdate > 0 ? post.postdate : Math.floor(Date.now() / 1000)) * 1000).toISOString()
+        });
+      }
+    }
+
+    // For existing posts, just update heat score
+    for (const post of existingPosts) {
       const heatScore = calculateNgaHeatScore(post);
-      const comments = ngaCommentResults[i];
-      const sentiment = ngaSentiments[i] || keywordSentiment(post.subject);
-
       topics.push({
         id: `nga-${post.tid}`,
         title: post.subject,
-        sentiment: sentiment.label,
-        sentimentScore: sentiment.score,
+        sentiment: 'neutral',
+        sentimentScore: 0,
         heatScore,
         category: classifyTopic(post.subject),
         source: 'nga',
         trend: [heatScore],
-        summary: comments.length > 0
-          ? comments[0].content.slice(0, 100)
-          : `${post.replies} 条回复 · ${post.author}`,
+        summary: `${post.replies} 条回复 · ${post.author}`,
         url: `https://nga.178.com/read.php?tid=${post.tid}`,
         publishedAt: new Date(post.postdate * 1000).toISOString()
       });
@@ -685,24 +773,62 @@ export async function aggregateCommunityTopics(): Promise<CommunityTopic[]> {
     const xhhTopics = xhhResults.value;
     console.log(`[Community] Xiaoheihe news: ${xhhTopics.length}`);
 
+    // Separate new vs existing
+    const newXhh: typeof xhhTopics = [];
+    const existingXhh: typeof xhhTopics = [];
     for (const item of xhhTopics) {
       if (!isAcgRelated(item.title)) continue;
-      if (isDuplicate(item.title, seenTitles)) continue;
+      const id = `xhh-${item.linkid}`;
+      if (existingIds?.has(id)) {
+        existingXhh.push(item);
+        seenExistingIds.add(id);
+      } else {
+        newXhh.push(item);
+      }
+    }
 
-      const sentiment = await analyzeSentiment(item.title);
+    // Only do AI for new items — batch for efficiency
+    const validNewXhh = newXhh.filter(item => !isDuplicate(item.title, seenTitles));
+    if (validNewXhh.length > 0) {
+      const xhhTexts = validNewXhh.map(item => item.title);
+      const xhhSentiments = await aiSentimentBatch(xhhTexts);
 
+      for (let i = 0; i < validNewXhh.length; i++) {
+        const item = validNewXhh[i];
+        const sentiment = xhhSentiments[i] || keywordSentiment(item.title);
+        const ts = (item.modify_at || 0) > 0 ? item.modify_at : Math.floor(Date.now() / 1000);
+
+        topics.push({
+          id: `xhh-${item.linkid}`,
+          title: item.title,
+          sentiment: sentiment.label,
+          sentimentScore: sentiment.score,
+          heatScore: 50,
+          category: classifyTopic(item.title),
+          source: 'xiaoheihe',
+          trend: [50],
+          summary: item.description?.slice(0, 120) || item.title,
+          url: `https://xiaoheihe.cn/bbs/app/share/detail/${item.linkid}`,
+          publishedAt: new Date(ts * 1000).toISOString()
+        });
+      }
+    }
+
+    // Existing items: just keep heat score
+    for (const item of existingXhh) {
+      const ts = (item.modify_at || 0) > 0 ? item.modify_at : Math.floor(Date.now() / 1000);
       topics.push({
         id: `xhh-${item.linkid}`,
         title: item.title,
-        sentiment: sentiment.label,
-        sentimentScore: sentiment.score,
-        heatScore: 50, // Xiaoheihe doesn't provide explicit heat metrics
+        sentiment: 'neutral',
+        sentimentScore: 0,
+        heatScore: 50,
         category: classifyTopic(item.title),
         source: 'xiaoheihe',
         trend: [50],
         summary: item.description?.slice(0, 120) || item.title,
         url: `https://xiaoheihe.cn/bbs/app/share/detail/${item.linkid}`,
-        publishedAt: new Date((item.modify_at || 0) * 1000).toISOString()
+        publishedAt: new Date(ts * 1000).toISOString()
       });
     }
   }
@@ -710,7 +836,8 @@ export async function aggregateCommunityTopics(): Promise<CommunityTopic[]> {
   // Sort by heat score
   topics.sort((a, b) => b.heatScore - a.heatScore);
 
-  console.log(`[Community] Total topics: ${topics.length}`);
+  const skipped = existingIds ? seenExistingIds.size : 0;
+  console.log(`[Community] Total topics: ${topics.length} (skipped AI for ${skipped} existing)`);
   return topics;
 }
 

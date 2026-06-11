@@ -17,6 +17,7 @@ import hotSearchRouter from './gamepulse/routes/hotSearch.js';
 import { createAdminRouter } from './gamepulse/routes/admin.js';
 import communityRouter from './gamepulse/routes/community.js';
 import { runGamePulseCheck } from './gamepulse/jobs/checker.js';
+import { scheduledCommunityRefresh } from './gamepulse/services/communityService.js';
 import { requestLogger, errorHandler, notFoundHandler } from './gamepulse/routes/middleware.js';
 import { requireAdmin } from './gamepulse/auth.js';
 
@@ -155,6 +156,15 @@ cron.schedule('*/30 * * * *', async () => {
     console.log('[GamePulse] Scheduled check completed:', result);
   } catch (error) {
     console.error('[GamePulse] Scheduled check failed:', error);
+  }
+});
+
+// Community data refresh: every 30 minutes, offset by 15 minutes
+cron.schedule('15,45 * * * *', async () => {
+  try {
+    await scheduledCommunityRefresh(io);
+  } catch (error) {
+    console.error('[Community] Scheduled refresh failed:', error);
   }
 });
 

@@ -73,18 +73,6 @@ export const COMMUNITY_SOURCES: Record<string, string> = {
   xiaoheihe: '小黑盒'
 };
 
-export interface CommunityTopic {
-  id: string;
-  title: string;
-  sentiment: 'positive' | 'negative' | 'neutral';
-  sentimentScore: number;
-  heatScore: number;
-  category: string;
-  source: string;
-  trend: number[];
-  summary: string;
-  url: string;
-  publishedAt: string;
-}
+export type { CommunityTopic } from '../../shared/community';
 
 

@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { SENTIMENT_TYPES, TOPIC_CATEGORIES, COMMUNITY_SOURCES } from '../constants';
 import type { CommunityTopic } from '../constants';
 import { cn } from '../lib/utils';
 import { CommunityTopicCard } from './CommunityTopicCard';
 import { SummaryMetric } from './SummaryMetric';
+import { onCommunityUpdate } from '../services/socket';
 
 export function CommunityPanel() {
   const [topics, setTopics] = useState<CommunityTopic[]>([]);
@@ -15,7 +16,7 @@ export function CommunityPanel() {
   const [sourceFilter, setSourceFilter] = useState('');
   const [summary, setSummary] = useState<{ sentimentCounts: { positive: number; negative: number; neutral: number }; avgHeat: number } | null>(null);
 
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     setLoading(true);
     setError('');
     fetch('/api/community/topics')
@@ -33,9 +34,18 @@ export function CommunityPanel() {
         setError(err.message || '加载失败');
       })
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Debounced socket refresh — prevents rapid-fire refetches
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    return onCommunityUpdate(() => {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(fetchData, 3000);
+    });
+  }, [fetchData]);
 
   const filtered = useMemo(() => {
     return topics.filter(t => {

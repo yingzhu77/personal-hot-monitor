@@ -43,7 +43,7 @@ model Source {
   followed      Boolean    @default(false)
   enabled       Boolean    @default(true)
   priority      Int        @default(50)
-  healthStatus  String     @default("unknown") // unknown, healthy, degraded, failed
+  healthStatus  String     @default("unknown") // unknown, healthy, failed
   lastSuccessAt DateTime?
   lastCheckedAt DateTime?
   lastError     String?
@@ -106,4 +106,25 @@ model Analysis {
   @@index([importance])
   @@index([visibility])
   @@index([category])
+}
+
+model CommunityTopic {
+  id             String   @id // e.g. "bilibili-12345", "nga-67890"
+  title          String
+  sentiment      String   // positive, negative, neutral
+  sentimentScore Float    @default(0)
+  heatScore      Float    @default(0)
+  category       String
+  source         String   // bilibili, nga, xiaoheihe
+  trend          String   @default("[]") // JSON array of numbers
+  summary        String   @default("")
+  url            String
+  publishedAt    DateTime
+  fetchedAt      DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+
+  @@index([source])
+  @@index([sentiment])
+  @@index([heatScore])
+  @@index([lastSeenAt])
 }

@@ -53,3 +53,9 @@ export function onReanalyzeError(callback: (error: { error: string }) => void): 
   s.on('reanalyze:error', callback);
   return () => s.off('reanalyze:error', callback);
 }
+
+export function onCommunityUpdate(callback: (data: { totalTopics: number; timestamp: string }) => void): () => void {
+  const s = getSocket();
+  s.on('community:update', callback);
+  return () => s.off('community:update', callback);
+}
