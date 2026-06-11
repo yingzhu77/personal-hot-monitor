@@ -10,6 +10,7 @@ import { useFavorites } from './hooks/useFavorites';
 import { useHotSearch } from './hooks/useHotSearch';
 import type { ViewMode } from './constants';
 import { GameFilterPanel } from './components/GameFilterPanel';
+import { LogoBrand } from './components/LogoBrand';
 import { TopBar } from './components/TopBar';
 import { FeedPanel } from './components/FeedPanel';
 import { InsightsPage } from './components/InsightsPage';
@@ -68,6 +69,7 @@ function App() {
     >
       <div className="scene-scrim" />
       <div className={`game-pulse-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+        <LogoBrand />
         <GameFilterPanel
           games={publicData.games}
           facets={publicData.facets}

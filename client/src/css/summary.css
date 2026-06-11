@@ -600,7 +600,8 @@
   .topbar,
   .main-column,
   .summary-column,
-  .left-sidebar {
+  .left-sidebar,
+  .logo-brand {
     grid-column: 1;
     grid-row: auto;
   }

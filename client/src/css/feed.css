@@ -39,6 +39,46 @@
   border-radius: 50%;
 }
 
+/* Logo Brand - left sidebar top */
+.logo-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px 12px;
+}
+
+.logo-brand-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 4px 20px rgba(255, 90, 120, 0.25);
+}
+
+.logo-brand-text {
+  min-width: 0;
+}
+
+.logo-brand-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #ff5b8a, #ff8fa3);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+}
+
+.logo-brand-sub {
+  margin: 2px 0 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
 .brand-title {
   margin: 0;
   font-size: 24px;
@@ -561,4 +601,86 @@
 .feed-footer-link:hover {
   opacity: 1;
   color: var(--text);
+}
+
+/* Export button */
+.export-btn-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.export-btn-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--panel-soft);
+  border: 1px solid var(--stroke);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.15s;
+}
+
+.export-btn-trigger:hover {
+  background: var(--bg-hover);
+}
+
+.export-btn-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.export-btn-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  z-index: 100;
+  min-width: 200px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel-bg);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.export-btn-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.82rem;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.export-btn-item:hover {
+  background: var(--bg-hover);
+}
+
+.export-btn-label {
+  font-weight: 500;
+}
+
+.export-btn-date {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.export-icon-blue {
+  color: #6d8cff;
+}
+
+.export-icon-green {
+  color: #4ecf98;
 }

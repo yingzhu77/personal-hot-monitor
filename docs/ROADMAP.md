@@ -44,3 +44,10 @@
   - 优化移动端批量筛选、刷新提示和空状态。
 - 数据库升级预案：
   - 当写入并发或公开访问量明显提升时，评估从 SQLite 迁移到 PostgreSQL。
+- 社区热点页性能优化：
+  - P0：先返回旧数据、后台异步刷新，消除冷启动 30-60s 阻塞。
+  - P1：NGA 6 论坛并行抓取（3 个一批），替换串行+500ms 延迟。
+  - P1：Framer Motion 去掉逐帧 stagger delay，加 React.memo。
+  - P2：跳过低热话题 AI 情绪分析，减少 API 调用。
+  - P2：数据库批量 upsert 替代逐条写入。
+  - P3：API 响应加 Cache-Control 头。
