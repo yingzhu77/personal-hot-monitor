@@ -28,6 +28,13 @@ AI 驱动的游戏/ACG 资讯聚合面板，自动采集多源内容，智能分
 | RSS | RSSHub (Docker) |
 | 部署 | Docker Compose |
 
+## 项目协作
+
+- [Agent 协作手册](docs/AGENT_WORKFLOW.md)：任务输入格式、开发流程、验证命令、提交规范。
+- [优化路线图](docs/ROADMAP.md)：当前阶段、第二阶段和第三阶段待办。
+- [踩坑记录](docs/LESSONS.md)：已验证的问题模式、根因和复用规则。
+- [架构决策](docs/DECISIONS.md)：关键技术选择和后续变更入口。
+
 ## 快速开始
 
 > **编码约定**：项目源码和文档均使用 UTF-8。Windows PowerShell 读取中文文件时建议显式使用
