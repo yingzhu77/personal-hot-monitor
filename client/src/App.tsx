@@ -69,8 +69,9 @@ function App() {
     >
       <div className="scene-scrim" />
       <div className={`game-pulse-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-        <LogoBrand />
-        <GameFilterPanel
+        <div className="left-column">
+          <LogoBrand />
+          <GameFilterPanel
           games={publicData.games}
           facets={publicData.facets}
           allFacets={publicData.allFacets}
@@ -94,6 +95,7 @@ function App() {
           selectedHotTag={hotSearch.selectedTag}
           onSelectHotTag={hotSearch.selectTag}
         />
+        </div>
 
         <TopBar
           theme={theme}

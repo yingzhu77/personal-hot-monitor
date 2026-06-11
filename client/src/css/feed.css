@@ -19,25 +19,26 @@
 
 /* Logo Brand - left sidebar top */
 .logo-brand {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px 16px 8px;
+  padding: 24px 16px 14px;
   text-align: center;
 }
 
 .logo-brand-img {
-  width: 100px;
-  height: 100px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   object-fit: cover;
-  box-shadow: 0 4px 24px rgba(255, 90, 120, 0.3);
-  margin-bottom: 10px;
+  box-shadow: 0 6px 28px rgba(255, 90, 120, 0.35);
+  margin-bottom: 12px;
 }
 
 .logo-brand-title {
   margin: 0;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 900;
   letter-spacing: -0.5px;
   background: linear-gradient(135deg, #ff5b8a, #ff8fa3);
@@ -49,9 +50,63 @@
 
 .logo-brand-sub {
   margin: 4px 0 0;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   letter-spacing: 0.5px;
+}
+
+.logo-close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--stroke);
+  background: var(--panel-soft);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  opacity: 0.5;
+}
+
+.logo-close-btn:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.logo-brand-collapsed {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.logo-expand-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--stroke);
+  background: var(--panel-soft);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s, transform 0.2s;
+}
+
+.logo-expand-btn:hover {
+  background: var(--bg-hover);
+  transform: scale(1.08);
+}
+
+.logo-expand-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .nav-tabs {
