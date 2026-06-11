@@ -5,6 +5,9 @@ import { getAdapter } from '../adapters/registry.js';
 import { contentHash, normalizeUrl, truncate } from '../utils.js';
 import { fetchBilibiliAvatar } from '../adapters/bilibiliVideo.js';
 
+let checkRunning = false;
+let checkStartedAt: Date | null = null;
+
 export interface CheckResult {
   checkedSources: number;
   newItems: number;
@@ -62,6 +65,24 @@ async function cleanupOldItems(): Promise<number> {
 }
 
 export async function runGamePulseCheck(io?: Server): Promise<CheckResult> {
+  if (checkRunning) {
+    const elapsed = checkStartedAt ? Math.round((Date.now() - checkStartedAt.getTime()) / 1000) : 0;
+    console.log(`[GamePulse] Check already running for ${elapsed}s, skipping`);
+    return { checkedSources: 0, newItems: 0, failedSources: 0 };
+  }
+
+  checkRunning = true;
+  checkStartedAt = new Date();
+
+  try {
+    return await doRunGamePulseCheck(io);
+  } finally {
+    checkRunning = false;
+    checkStartedAt = null;
+  }
+}
+
+async function doRunGamePulseCheck(io?: Server): Promise<CheckResult> {
   const sources = await prisma.source.findMany({
     where: { enabled: true },
     orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }]
@@ -174,6 +195,10 @@ async function checkSource(
       }
     });
 
+    await prisma.sourceHealthLog.create({
+      data: { sourceId: source.id, status: 'healthy' }
+    });
+
     return { newItems: sourceNewCount, failed: false };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown source error';
@@ -184,6 +209,10 @@ async function checkSource(
         lastCheckedAt: new Date(),
         lastError: message.slice(0, 500)
       }
+    });
+
+    await prisma.sourceHealthLog.create({
+      data: { sourceId: source.id, status: 'failed', error: message.slice(0, 500) }
     });
     io?.emit('source:error', {
       sourceId: source.id,
@@ -231,4 +260,8 @@ function getSourceCheckTimeoutMs(): number {
 function getSourceCheckConcurrency(): number {
   const parsed = Number(process.env.SOURCE_CHECK_CONCURRENCY);
   return Number.isFinite(parsed) && parsed >= 1 ? Math.min(parsed, 6) : 3;
+}
+
+export function getCheckerStatus() {
+  return { running: checkRunning, startedAt: checkStartedAt?.toISOString() || null };
 }

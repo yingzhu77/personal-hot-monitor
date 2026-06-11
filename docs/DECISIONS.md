@@ -2,6 +2,24 @@
 
 本文档记录对长期维护有影响的项目决策。新增决策按时间倒序追加。
 
+## 2026-06-12：SQLite 备份采用脚本方案 + 源健康历史表 + checker 互斥锁
+
+**决策**：
+1. SQLite 备份/恢复用 shell 脚本实现，不引入外部队列或 cron 容器。
+2. 新增 `SourceHealthLog` 表记录每次源检查结果，保留最近 24 小时统计。
+3. `runGamePulseCheck` 增加内存互斥锁，未完成时跳过下一次触发。
+
+**原因**：
+- 备份脚本简单可靠，`sqlite3 .backup` 保证热备一致性，无需额外依赖。
+- 源健康历史让运维可见"哪个源在什么时候失败、失败率多少"，而不只是当前状态。
+- 定时任务互斥防止采集重叠导致重复数据或资源竞争，社区刷新已有类似 `fetchPromise` 模式。
+
+**影响**：
+- 部署后需要执行 Prisma schema 同步，确保 `SourceHealthLog` 表存在。
+- 备份脚本可配合 crontab 实现定时备份。
+- `/api/health` 接口现在包含 `checker.running` 状态。
+- 新增 `/api/public/source-health-history` 接口提供健康历史统计。
+
 ## 2026-06-12：AI 分析队列先基于 Prisma/SQLite 持久化
 
 **决策**：AI 分析队列从进程内数组迁移为 `AnalysisTask` 数据库任务表，先保留单进程 worker 和 5 秒节流，不引入 Redis/BullMQ 等外部队列。

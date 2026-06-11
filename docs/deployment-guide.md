@@ -113,13 +113,54 @@ docker compose up -d --build
 
 ## 数据备份
 
-```bash
-# 备份数据库
-docker exec game-pulse cp /app/server/data/prod.db /app/server/data/prod.db.bak
+### 手动备份
 
-# 导出到本地
+```bash
+# 使用备份脚本（推荐）
+bash scripts/backup-db.sh
+
+# 备份到指定目录，保留最近 10 份
+bash scripts/backup-db.sh game-pulse /opt/backups 10
+
+# 手动方式
+docker exec game-pulse cp /app/server/data/prod.db /app/server/data/prod.db.bak
 docker cp game-pulse:/app/server/data/prod.db ./backup/
 ```
+
+### 定时备份（推荐）
+
+```bash
+# 每天凌晨 3 点自动备份，保留 7 份
+crontab -e
+# 添加：
+0 3 * * * cd /opt/personal-hot-monitor && bash scripts/backup-db.sh >> /var/log/acg-backup.log 2>&1
+```
+
+### 恢复数据库
+
+```bash
+# 从备份恢复
+bash scripts/restore-db.sh ./backups/prod_20260612_030000.db
+
+# 恢复脚本会自动：校验 SHA256 → 创建回退快照 → 停止服务 → 替换数据库 → 重启服务
+```
+
+## 源健康监控
+
+源健康历史每 30 分钟自动记录。查看健康状态：
+
+```bash
+# 查看源健康历史统计
+curl http://localhost:3001/api/public/source-health-history
+
+# 查看服务状态（包含 checker 运行状态）
+curl http://localhost:3001/api/health
+```
+
+健康历史接口返回：
+- `recentLogs`：最近 24 小时的检查日志
+- `sourceStats`：每个源的失败率统计
+- `totalChecks24h` / `totalFailures24h`：24 小时总检查/失败次数
 
 ## 常见问题
 

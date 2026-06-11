@@ -208,3 +208,44 @@ bash save-cookie.sh
 **现象**: 服务卡顿或 OOM
 **原因**: 1GB 内存不够同时运行 Node.js + Docker + RSSHub
 **解决**: 升级到 2GB 内存
+
+### 4. 定时任务重叠执行
+
+**现象**: 日志显示 "Check already running for Xs, skipping"
+**原因**: 上一次采集尚未完成，下一次定时触发被跳过
+**解决**: 正常行为。互斥锁确保不会重复采集。如果长期卡住，检查是否有慢源超时。
+
+### 5. 源持续失败
+
+**现象**: 某个源 healthStatus 显示 failed
+**排查**:
+```bash
+# 查看源健康历史
+curl http://localhost:3001/api/public/source-health-history
+
+# 查看最近日志
+docker compose logs app --tail 50 | grep "source failed"
+```
+**常见原因**:
+- B站 Cookie 过期 → 重新获取
+- RSSHub 不可用 → 检查 rsshub 容器
+- 网络超时 → 增加 SOURCE_CHECK_TIMEOUT_MS
+
+### 6. 数据库损坏恢复
+
+**现象**: 服务启动失败，日志显示 database disk image is malformed
+**恢复**:
+```bash
+# 1. 停止服务
+docker compose stop app
+
+# 2. 尝试修复
+docker exec game-pulse sqlite3 /app/server/data/prod.db ".recover" > /tmp/recovered.db
+docker cp /tmp/recovered.db game-pulse:/app/server/data/prod.db
+
+# 3. 重启
+docker compose start app
+
+# 4. 如修复失败，从备份恢复
+bash scripts/restore-db.sh ./backups/prod_最新备份.db
+```

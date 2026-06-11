@@ -17,7 +17,7 @@ import hotSearchRouter from './gamepulse/routes/hotSearch.js';
 import { createAdminRouter } from './gamepulse/routes/admin.js';
 import communityRouter from './gamepulse/routes/community.js';
 import { startAnalysisQueueWorker } from './gamepulse/ai/analysisQueue.js';
-import { runGamePulseCheck } from './gamepulse/jobs/checker.js';
+import { runGamePulseCheck, getCheckerStatus } from './gamepulse/jobs/checker.js';
 import { scheduledCommunityRefresh } from './gamepulse/services/communityService.js';
 import { requestLogger, errorHandler, notFoundHandler } from './gamepulse/routes/middleware.js';
 import { requireAdmin } from './gamepulse/auth.js';
@@ -95,7 +95,13 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/notifications', notificationsRouter);
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', app: 'game-pulse', timestamp: new Date().toISOString() });
+  const checker = getCheckerStatus();
+  res.json({
+    status: 'ok',
+    app: 'game-pulse',
+    timestamp: new Date().toISOString(),
+    checker: { running: checker.running, startedAt: checker.startedAt }
+  });
 });
 
 app.post('/api/check-hotspots', requireAdmin, async (_req, res) => {

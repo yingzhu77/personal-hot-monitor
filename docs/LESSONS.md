@@ -424,6 +424,39 @@ Get-Content -Encoding UTF8 docs\LESSONS.md
 
 ---
 
+### 5.7 SQLite 备份不要只用 cp
+
+**问题**：`cp` 复制正在写入的 SQLite 数据库可能得到不一致的快照（写入进行中时复制）。
+
+**解决**：使用 `sqlite3 .backup` 命令或 SQLite 的 backup API，它在备份期间持有短暂锁，保证一致性。在容器内执行：
+```bash
+sqlite3 /app/server/data/prod.db '.backup /tmp/backup.db'
+```
+
+**规则**：SQLite 热备份优先用 `.backup` 命令，不要用 `cp`/`rsync`。
+
+---
+
+### 5.8 定时任务需要互斥锁
+
+**问题**：cron 触发的采集任务可能在上一次未完成时再次启动，导致重复采集或资源竞争。
+
+**解决**：在任务入口检查 `running` 标志，已运行时跳过本次触发并记录日志。用 `try/finally` 确保标志在异常时也能清理。
+
+**通用模式**：
+```typescript
+let running = false;
+async function runTask() {
+  if (running) { log('skipping'); return; }
+  running = true;
+  try { await doWork(); } finally { running = false; }
+}
+```
+
+**规则**：任何可能重叠执行的定时任务，都需要互斥锁或队列保证串行。
+
+---
+
 ## 六、Prompt 模板（可复用）
 
 ### Bug 修复
@@ -458,3 +491,4 @@ Get-Content -Encoding UTF8 docs\LESSONS.md
 |------|------|
 | 2026-06-09 | 初始版本：从三轮 code review + 部署 + AI 分类调试中提炼 |
 | 2026-06-09 | 重构为跨项目可复用格式，分离项目特定内容到 AGENTS.md |
+| 2026-06-12 | 补充 SQLite 备份恢复、源健康历史、定时任务互斥锁经验 |

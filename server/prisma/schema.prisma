@@ -50,9 +50,22 @@ model Source {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   feedItems     FeedItem[]
+  healthLogs    SourceHealthLog[]
 
   @@index([enabled, type])
   @@index([game])
+}
+
+model SourceHealthLog {
+  id            String   @id @default(uuid())
+  sourceId      String
+  status        String   // healthy, failed
+  error         String?
+  checkedAt     DateTime @default(now())
+  source        Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId, checkedAt])
+  @@index([checkedAt])
 }
 
 model FeedItem {
