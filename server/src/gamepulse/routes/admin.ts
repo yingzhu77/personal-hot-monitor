@@ -10,6 +10,7 @@ import {
   retryFailedAnalysisTasks
 } from '../ai/analysisQueue.js';
 import { runGamePulseCheck } from '../jobs/checker.js';
+import { rebuildFTS5, isFTS5Ready } from '../search.js';
 import type { PrismaWhereClause } from '../types.js';
 import {
   CreateSourceSchema,
@@ -233,6 +234,17 @@ export function createAdminRouter(io: Server): Router {
   router.post('/check', async (_req, res) => {
     const result = await runGamePulseCheck(io);
     res.json(result);
+  });
+
+  router.post('/search-index/rebuild', async (_req, res) => {
+    try {
+      await rebuildFTS5();
+      const ready = await isFTS5Ready();
+      res.json({ ready, message: 'FTS5 index rebuilt successfully' });
+    } catch (error) {
+      console.error('Rebuild FTS5 failed:', error);
+      res.status(500).json({ error: 'Failed to rebuild search index' });
+    }
   });
 
   router.get('/analysis-queue', async (_req, res) => {

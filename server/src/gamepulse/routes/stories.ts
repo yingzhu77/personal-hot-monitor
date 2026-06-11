@@ -15,6 +15,7 @@ import {
   PublicStoriesQuerySchema,
   validateOrThrow
 } from '../validation.js';
+import { searchFeedItems, isFTS5Ready } from '../search.js';
 
 const router = Router();
 
@@ -46,13 +47,32 @@ router.get('/items', async (req, res) => {
     if (official !== undefined && official !== '') {
       where.source = { isOfficial: String(official) === 'true' };
     }
+
+    // FTS5 search: use FTS if available, fallback to LIKE
+    let ftsIds: string[] | null = null;
+    let ftsTotal = 0;
     if (q) {
-      where.OR = [
-        { title: { contains: String(q) } },
-        { content: { contains: String(q) } },
-        { authorName: { contains: String(q) } }
-      ];
+      const ftsReady = await isFTS5Ready();
+      if (ftsReady) {
+        const ftsResult = await searchFeedItems(String(q), { limit: 1000, offset: 0 });
+        ftsIds = ftsResult.feedItemIds;
+        ftsTotal = ftsResult.total;
+        if (ftsIds.length === 0) {
+          // FTS returned no results, return empty
+          res.json({ data: [], pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 } });
+          return;
+        }
+        where.id = { in: ftsIds };
+      } else {
+        // Fallback to LIKE
+        where.OR = [
+          { title: { contains: String(q) } },
+          { content: { contains: String(q) } },
+          { authorName: { contains: String(q) } }
+        ];
+      }
     }
+
     applyAnalysisFilters(where, { category, importance, visibility });
     applyLowValueNoticeFilter(where, visibility);
 
@@ -84,8 +104,8 @@ router.get('/items', async (req, res) => {
       pagination: {
         page: pageNum,
         limit: limitNum,
-        total,
-        totalPages: Math.ceil(total / limitNum)
+        total: q && ftsIds ? ftsTotal : total,
+        totalPages: Math.ceil((q && ftsIds ? ftsTotal : total) / limitNum)
       }
     });
   } catch (error) {
@@ -135,12 +155,28 @@ router.get('/stories', async (req, res) => {
     if (official !== undefined && official !== '') {
       where.source = { isOfficial: String(official) === 'true' };
     }
+
+    // FTS5 search: use FTS if available, fallback to LIKE
+    let ftsIds: string[] | null = null;
     if (q) {
-      where.OR = [
-        { title: { contains: String(q) } },
-        { content: { contains: String(q) } },
-        { authorName: { contains: String(q) } }
-      ];
+      const ftsReady = await isFTS5Ready();
+      if (ftsReady) {
+        const ftsResult = await searchFeedItems(String(q), { limit: 1000, offset: 0 });
+        ftsIds = ftsResult.feedItemIds;
+        if (ftsIds.length === 0) {
+          // FTS returned no results, return empty
+          res.json({ data: [], pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 }, facets: {} });
+          return;
+        }
+        where.id = { in: ftsIds };
+      } else {
+        // Fallback to LIKE
+        where.OR = [
+          { title: { contains: String(q) } },
+          { content: { contains: String(q) } },
+          { authorName: { contains: String(q) } }
+        ];
+      }
     }
 
     // followGroup: 'follow' = only followed sources, 'game' = only non-followed sources
@@ -166,7 +202,7 @@ router.get('/stories', async (req, res) => {
     const items = await prisma.feedItem.findMany({
       where,
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
-      take: candidateLimit,
+      take: q && ftsIds ? ftsIds.length : candidateLimit,
       include: {
         source: {
           select: {

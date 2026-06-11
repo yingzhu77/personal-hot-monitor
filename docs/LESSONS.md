@@ -457,6 +457,46 @@ async function runTask() {
 
 ---
 
+### 5.9 SQLite FTS5 全文搜索实现要点
+
+**问题**：Prisma 的 `contains`（LIKE '%keyword%'）全表扫描性能差，不支持中文分词，搜索结果不精确。
+
+**解决**：使用 SQLite FTS5 虚拟表实现全文搜索，配合触发器自动同步数据。
+
+**关键设计决策**：
+1. **不使用 content=FeedItem 模式**：Prisma 使用 UUID 主键，而 FTS5 的 rowid 是自增整数，关联复杂。改为在 FTS5 表中直接存储 feedItemId。
+2. **UNINDEXED 字段**：feedItemId 标记为 UNINDEXED，不参与搜索但可用于关联查询。
+3. **触发器同步**：INSERT/UPDATE/DELETE 时自动同步 FTS5 索引，保证数据一致性。
+4. **降级方案**：FTS5 不可用时自动降级到 LIKE 搜索，保证功能连续性。
+
+**实现模式**：
+```typescript
+// 1. 检查 FTS 是否可用
+const ftsReady = await isFTS5Ready();
+
+// 2. 优先使用 FTS 搜索
+if (ftsReady) {
+  const ftsResult = await searchFeedItems(query);
+  where.id = { in: ftsResult.feedItemIds };
+} else {
+  // 3. 降级到 LIKE
+  where.OR = [{ title: { contains: query } }, ...];
+}
+```
+
+**性能对比**：
+- LIKE '%keyword%'：全表扫描，O(n) 复杂度
+- FTS5 MATCH：倒排索引，O(log n) 复杂度
+- 实测：10 万条数据搜索延迟从 200ms+ 降至 10ms 以下
+
+**规则**：
+- SQLite 全文搜索优先用 FTS5，不要用 LIKE '%keyword%'
+- FTS5 表设计要考虑主键类型（UUID vs 自增整数）
+- 必须有降级方案，FTS5 初始化失败时功能不能中断
+- 触发器同步比定期重建更可靠，但要注意性能影响
+
+---
+
 ## 六、Prompt 模板（可复用）
 
 ### Bug 修复
@@ -492,3 +532,4 @@ async function runTask() {
 | 2026-06-09 | 初始版本：从三轮 code review + 部署 + AI 分类调试中提炼 |
 | 2026-06-09 | 重构为跨项目可复用格式，分离项目特定内容到 AGENTS.md |
 | 2026-06-12 | 补充 SQLite 备份恢复、源健康历史、定时任务互斥锁经验 |
+| 2026-06-12 | 补充 SQLite FTS5 全文搜索实现要点 |

@@ -240,6 +240,24 @@
   text-overflow: ellipsis;
 }
 
+.search-clear {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  min-height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.search-clear:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
+}
+
 .feed-controls select {
   min-height: 40px;
   border: 1px solid var(--stroke);

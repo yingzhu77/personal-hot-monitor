@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronDown, ExternalLink, Search, Flame } from 'lucide-react';
+import { ChevronDown, ExternalLink, Search, Flame, X } from 'lucide-react';
 import type { Story, HotSearchItem } from '../services/api';
 import type { HotTag } from '../hooks/useHotSearch';
 import { StoryCard } from './StoryCard';
@@ -92,8 +92,21 @@ export function FeedPanel(props: FeedPanelProps) {
             <input
               value={searchQuery}
               onChange={event => handleSearchChange(event.target.value)}
-              placeholder="搜索版本、角色、活动、来源"
+              placeholder="全文搜索标题、内容、作者、来源"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                className="search-clear"
+                onClick={() => {
+                  setSearchQuery('');
+                  props.setFilters(prev => ({ ...prev, q: '' }));
+                }}
+                aria-label="清除搜索"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </label>
         </div>
       </div>

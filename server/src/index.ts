@@ -21,6 +21,7 @@ import { runGamePulseCheck, getCheckerStatus } from './gamepulse/jobs/checker.js
 import { scheduledCommunityRefresh } from './gamepulse/services/communityService.js';
 import { requestLogger, errorHandler, notFoundHandler } from './gamepulse/routes/middleware.js';
 import { requireAdmin } from './gamepulse/auth.js';
+import { ensureFTS5, rebuildFTS5 } from './gamepulse/search.js';
 
 dotenv.config();
 
@@ -180,6 +181,11 @@ cron.schedule('15,45 * * * *', async () => {
 export { io };
 
 const PORT = process.env.PORT || 3001;
+
+// Initialize FTS5 search index
+ensureFTS5().catch(err => {
+  console.error('[FTS5] Failed to initialize search index:', err);
+});
 
 httpServer.listen(PORT, () => {
   console.log(`
