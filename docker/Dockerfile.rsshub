@@ -8,4 +8,4 @@ RUN npm install -g playwright@1.60.0 \
 COPY docker/rsshub-entrypoint.sh /usr/local/bin/game-pulse-rsshub-entrypoint
 RUN chmod +x /usr/local/bin/game-pulse-rsshub-entrypoint
 
-CMD ["game-pulse-rsshub-entrypoint"]
+CMD ["/usr/local/bin/game-pulse-rsshub-entrypoint"]

@@ -42,7 +42,6 @@ Thumbs.db
 # Docker files (not needed in build context)
 docker-compose*.yml
 docker/Dockerfile.rsshub
-docker/rsshub-entrypoint.sh
 
 # Documentation
 *.md
