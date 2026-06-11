@@ -29,7 +29,7 @@ export function TopBar(props: TopBarProps) {
     <header className="topbar">
       <div className="brand-lockup">
         <div className="brand-mark">
-          <img src="/logo.webp" alt="ACG Pulse" className="brand-logo" />
+          <img src="/logo.png" alt="ACG Pulse" className="brand-logo" />
         </div>
         <h1 className="brand-title">ACG Pulse</h1>
       </div>
