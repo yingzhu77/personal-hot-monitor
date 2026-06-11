@@ -3,6 +3,7 @@ import { Moon, RefreshCw, Settings, Sun } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { Theme, ViewMode } from '../constants';
 import { formatDateTime } from '../utils/format';
+import { ReportExportButton } from './ReportExportButton';
 
 export interface TopBarProps {
   theme: Theme;
@@ -59,6 +60,7 @@ export function TopBar(props: TopBarProps) {
         <button className="icon-button" onClick={props.onRefresh} aria-label="刷新">
           <RefreshCw className={cn('h-4 w-4', props.loading && 'spin-active')} />
         </button>
+        <ReportExportButton />
         <div className="theme-switch" aria-label="主题切换">
           <button className={props.theme === 'light' ? 'active' : ''} onClick={() => props.setTheme('light')} aria-label="日间">
             <Sun className="h-4 w-4" />

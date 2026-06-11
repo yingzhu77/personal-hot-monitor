@@ -2,6 +2,27 @@
 
 本文档记录对长期维护有影响的项目决策。新增决策按时间倒序追加。
 
+## 2026-06-12：日报/周报 Markdown 导出方案
+
+**决策**：先实现 Markdown 格式的日报/周报导出，暂不引入 PDF 导出。
+
+**原因**：
+- Markdown 是纯文本，无需额外依赖，生成和消费成本最低。
+- 复用现有 `/api/public/stories` 的查询和聚合逻辑，只加一层格式化。
+- 前端通过 `window.open` 直接触发浏览器下载，无需额外状态管理。
+- PDF 导出依赖重量级库（如 puppeteer、html2pdf.js），对 Docker 镜像大小和运行时内存有显著影响，需要独立评估。
+
+**技术选型**：
+1. **后端**：新增 `server/src/gamepulse/reports/markdownExport.ts` 生成 Markdown，`routes/handlers/reports.ts` 提供 API。
+2. **API 边界**：`GET /api/public/reports/daily`（JSON）、`GET /api/public/reports/weekly`（JSON）、`GET /api/public/reports/export`（Markdown 下载）。
+3. **筛选**：复用现有 `game`、`category`、`importance`、`visibility` 参数，时间范围通过 `date`（日报）或 `weekStart`（周报）控制。
+4. **前端**：`ReportExportButton` 组件嵌入 SummaryColumn，提供"今日日报"和"本周周报"两个快捷下载项。
+
+**影响**：
+- 新增 3 个公开 API 端点，不影响现有接口。
+- 前端 SummaryColumn 顶部新增导出按钮，不影响主页面布局。
+- 后续 PDF 导出可基于同一数据源，用浏览器端方案（html2pdf.js）或服务端方案（puppeteer），独立评估后再实施。
+
 ## 2026-06-12：SQLite FTS5 全文搜索方案
 
 **决策**：使用 SQLite FTS5 虚拟表实现全文搜索，替代 Prisma 的 LIKE '%keyword%' 查询。

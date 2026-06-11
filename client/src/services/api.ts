@@ -230,12 +230,55 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(TOKEN_KEY)
 };
 
+export interface ReportFilters {
+  type?: 'daily' | 'weekly';
+  date?: string;
+  weekStart?: string;
+  game?: string;
+  category?: string;
+  importance?: string;
+}
+
+export interface ReportSummary {
+  total: number;
+  high: number;
+  medium: number;
+  low: number;
+  games: string[];
+  categories: string[];
+}
+
+export interface ReportResponse {
+  meta: {
+    type: 'daily' | 'weekly';
+    dateRange: { start: string; end: string };
+    game?: string;
+    category?: string;
+    importance?: string;
+  };
+  stories: Story[];
+  summary: ReportSummary;
+}
+
 export const publicApi = {
   getItems: (filters?: ItemFilters) => request<Paginated<FeedItem>>(withParams('/public/items', filters)),
   getStories: (filters?: ItemFilters) => request<StoriesResponse>(withParams('/public/stories', filters)),
   getStats: () => request<PublicStats>('/public/stats'),
   getSources: () => request<Source[]>('/public/sources'),
-  getHotSearch: (filters?: { tag?: string; limit?: number }) => request<{ data: HotSearchItem[]; total: number; lastUpdated: string }>(withParams('/public/hot-search', filters))
+  getHotSearch: (filters?: { tag?: string; limit?: number }) => request<{ data: HotSearchItem[]; total: number; lastUpdated: string }>(withParams('/public/hot-search', filters)),
+  getDailyReport: (filters?: ReportFilters) => request<ReportResponse>(withParams('/public/reports/daily', filters as Record<string, unknown>)),
+  getWeeklyReport: (filters?: ReportFilters) => request<ReportResponse>(withParams('/public/reports/weekly', filters as Record<string, unknown>)),
+  exportReportUrl: (filters?: ReportFilters): string => {
+    const params: Record<string, string> = {};
+    if (filters?.type) params.type = filters.type;
+    if (filters?.date) params.date = filters.date;
+    if (filters?.weekStart) params.weekStart = filters.weekStart;
+    if (filters?.game) params.game = filters.game;
+    if (filters?.category) params.category = filters.category;
+    if (filters?.importance) params.importance = filters.importance;
+    const search = new URLSearchParams(params).toString();
+    return `/api/public/reports/export${search ? `?${search}` : ''}`;
+  }
 };
 
 export interface HotSearchItem {

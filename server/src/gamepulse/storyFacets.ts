@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import type { prisma as prismaClient } from '../db.js';
 import { appendAnd, lowValueNoticeExclusionWhere } from './routes/helpers.js';
 import type { PrismaWhereClause } from './types.js';
+import type { PublicStory } from './storyAggregation.js';
 
 export interface StoryFacets {
   byGame: Record<string, number>;
@@ -138,4 +139,37 @@ function importanceRowsToRecord(
     counts[importance] = (counts[importance] || 0) + row._count._all;
   }
   return counts;
+}
+
+/**
+ * Compute facets directly from aggregated stories (post-dedup).
+ * This ensures facet counts match the actual story list displayed to users.
+ */
+export function computeStoryFacetsFromStories(stories: PublicStory[]): StoryFacets {
+  const byGame: Record<string, number> = {};
+  const byCategory: Record<string, number> = {};
+  const byFollowCategory: Record<string, number> = {};
+  const byImportance: Record<string, number> = {};
+
+  const FOLLOW_CATEGORIES = new Set(['music', 'trailer', 'movie_trailer', 'creator_video']);
+
+  for (const story of stories) {
+    // Game counts
+    const game = story.game || '其他';
+    byGame[game] = (byGame[game] || 0) + 1;
+
+    // Category counts: split into game vs follow based on category type
+    const cat = story.category || 'other';
+    if (FOLLOW_CATEGORIES.has(cat)) {
+      byFollowCategory[cat] = (byFollowCategory[cat] || 0) + 1;
+    } else {
+      byCategory[cat] = (byCategory[cat] || 0) + 1;
+    }
+
+    // Importance counts
+    const imp = story.importance || 'low';
+    byImportance[imp] = (byImportance[imp] || 0) + 1;
+  }
+
+  return { byGame, byCategory, byFollowCategory, byImportance };
 }
