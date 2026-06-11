@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { hasRecentData, loadTopics, loadAllTopics, getLastFetchTime } from '../db/communityDb.js';
+import { hasRecentData, loadTopics, getLastFetchTime } from '../db/communityDb.js';
 import { refreshCommunityData } from '../services/communityService.js';
 import { asyncHandler } from './asyncHandler.js';
 
@@ -24,12 +24,11 @@ router.get('/topics', asyncHandler(async (req, res) => {
       await refreshCommunityData();
     }
   } catch (err) {
-    // Refresh failed — serve whatever is in the DB (stale is better than 500)
     console.error('[Community] Refresh failed, serving stale data:', err);
     isStale = true;
   }
 
-  const { sentiment, category, source, page = '1', limit = '50' } = req.query;
+  const { sentiment, category, source, page = '1', limit = '100' } = req.query;
 
   const filters = {
     sentiment: sentiment && sentiment !== 'all' && VALID_SENTIMENTS.has(String(sentiment)) ? String(sentiment) : undefined,
@@ -37,20 +36,20 @@ router.get('/topics', asyncHandler(async (req, res) => {
     source: source && source !== 'all' && VALID_SOURCES.has(String(source)) ? String(source) : undefined
   };
 
-  const filtered = await loadTopics(filters);
+  // Load all matching topics (sorted by heatScore desc)
+  const allFiltered = await loadTopics(filters);
 
   // Pagination
   const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 50));
-  const total = filtered.length;
+  const limitNum = Math.min(200, Math.max(1, parseInt(String(limit), 10) || 100));
+  const total = allFiltered.length;
   const start = (pageNum - 1) * limitNum;
-  const paged = filtered.slice(start, start + limitNum);
+  const paged = allFiltered.slice(start, start + limitNum);
 
-  // Summary stats (from full dataset)
-  const allTopics = await loadAllTopics();
+  // Summary stats — computed from the same dataset the client sees
   const sentimentCounts = { positive: 0, negative: 0, neutral: 0 };
   let totalHeat = 0;
-  for (const t of allTopics) {
+  for (const t of allFiltered) {
     sentimentCounts[t.sentiment]++;
     totalHeat += t.heatScore;
   }
@@ -67,8 +66,8 @@ router.get('/topics', asyncHandler(async (req, res) => {
     },
     summary: {
       sentimentCounts,
-      avgHeat: allTopics.length > 0 ? Math.round(totalHeat / allTopics.length) : 0,
-      totalTopics: allTopics.length
+      avgHeat: allFiltered.length > 0 ? Math.round(totalHeat / allFiltered.length) : 0,
+      totalTopics: allFiltered.length
     },
     lastUpdated: lastFetchTime > 0 ? new Date(lastFetchTime).toISOString() : null,
     stale: isStale || undefined
