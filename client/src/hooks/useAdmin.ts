@@ -25,6 +25,23 @@ export function useAdmin(showToast: ShowToast, loadPublicData: () => Promise<voi
   const [followName, setFollowName] = useState('');
   const [bilibiliCookie, setBilibiliCookie] = useState('');
 
+  const clearAdminSession = useCallback(() => {
+    tokenStore.clear();
+    setAdminToken(null);
+    setAdminSources([]);
+    setAnalysisQueue(null);
+  }, []);
+
+  const handleAdminLoadError = useCallback((error: unknown, fallbackMessage: string) => {
+    const message = error instanceof Error ? error.message : fallbackMessage;
+    if (message === 'Unauthorized') {
+      clearAdminSession();
+      showToast('error', '登录已过期，请重新输入管理员密码');
+      return;
+    }
+    showToast('error', message);
+  }, [clearAdminSession, showToast]);
+
   const loadAdminSources = useCallback(async () => {
     if (!adminToken && !tokenStore.get()) return;
     try {
@@ -35,18 +52,18 @@ export function useAdmin(showToast: ShowToast, loadPublicData: () => Promise<voi
         setBilibiliCookie(settings.BILIBILI_COOKIE);
       }
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : '后台数据加载失败');
+      handleAdminLoadError(error, '后台数据加载失败');
     }
-  }, [adminToken, showToast]);
+  }, [adminToken, handleAdminLoadError]);
 
   const loadAnalysisQueue = useCallback(async () => {
     if (!adminToken && !tokenStore.get()) return;
     try {
       setAnalysisQueue(await adminApi.getAnalysisQueue());
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : '队列状态加载失败');
+      handleAdminLoadError(error, '队列状态加载失败');
     }
-  }, [adminToken, showToast]);
+  }, [adminToken, handleAdminLoadError]);
 
   useEffect(() => {
     if (adminOpen) {
@@ -86,7 +103,7 @@ export function useAdmin(showToast: ShowToast, loadPublicData: () => Promise<voi
     } catch (error) {
       showToast('error', error instanceof Error ? error.message : '登录失败');
     }
-  }, [password, showToast, loadAdminSources]);
+  }, [password, showToast, loadAdminSources, loadAnalysisQueue]);
 
   const handleSeedDefaults = useCallback(async () => {
     if (!adminToken) {
@@ -190,11 +207,8 @@ export function useAdmin(showToast: ShowToast, loadPublicData: () => Promise<voi
   }, [adminToken, followUrl, followName, showToast, loadAdminSources, loadPublicData]);
 
   const handleLogout = useCallback(() => {
-    tokenStore.clear();
-    setAdminToken(null);
-    setAdminSources([]);
-    setAnalysisQueue(null);
-  }, []);
+    clearAdminSession();
+  }, [clearAdminSession]);
 
   const handleSaveCookie = useCallback(async () => {
     if (!adminToken) return;

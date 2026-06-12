@@ -50,13 +50,11 @@ router.get('/items', async (req, res) => {
 
     // FTS5 search: use FTS if available, fallback to LIKE
     let ftsIds: string[] | null = null;
-    let ftsTotal = 0;
     if (q) {
       const ftsReady = await isFTS5Ready();
       if (ftsReady) {
         const ftsResult = await searchFeedItems(String(q), { limit: 1000, offset: 0 });
         ftsIds = ftsResult.feedItemIds;
-        ftsTotal = ftsResult.total;
         if (ftsIds.length === 0) {
           // FTS returned no results, return empty
           res.json({ data: [], pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 } });
@@ -104,8 +102,8 @@ router.get('/items', async (req, res) => {
       pagination: {
         page: pageNum,
         limit: limitNum,
-        total: q && ftsIds ? ftsTotal : total,
-        totalPages: Math.ceil((q && ftsIds ? ftsTotal : total) / limitNum)
+        total,
+        totalPages: Math.ceil(total / limitNum)
       }
     });
   } catch (error) {
@@ -165,7 +163,11 @@ router.get('/stories', async (req, res) => {
         ftsIds = ftsResult.feedItemIds;
         if (ftsIds.length === 0) {
           // FTS returned no results, return empty
-          res.json({ data: [], pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 }, facets: {} });
+          res.json({
+            data: [],
+            pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 },
+            facets: { byGame: {}, byCategory: {}, byFollowCategory: {}, byImportance: {} }
+          });
           return;
         }
         where.id = { in: ftsIds };

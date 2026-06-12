@@ -55,13 +55,21 @@ export function TopBar(props: TopBarProps) {
         </button>
         <ReportExportButton />
         <div className="theme-switch" aria-label="主题切换">
-          <button className={props.theme === 'light' ? 'active' : ''} onClick={() => props.setTheme('light')} aria-label="日间">
+          <button
+            className={props.theme === 'light' ? 'active' : ''}
+            onClick={() => props.setTheme('light')}
+            aria-label="日间"
+            title="日间"
+          >
             <Sun className="h-4 w-4" />
-            日间
           </button>
-          <button className={props.theme === 'dark' ? 'active' : ''} onClick={() => props.setTheme('dark')} aria-label="夜间">
+          <button
+            className={props.theme === 'dark' ? 'active' : ''}
+            onClick={() => props.setTheme('dark')}
+            aria-label="夜间"
+            title="夜间"
+          >
             <Moon className="h-4 w-4" />
-            夜间
           </button>
         </div>
         <button className="icon-button" onClick={props.onOpenAdmin} aria-label="设置">

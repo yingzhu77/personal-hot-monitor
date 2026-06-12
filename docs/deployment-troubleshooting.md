@@ -187,6 +187,35 @@ curl -X POST http://localhost:3001/api/admin/check \
 bash save-cookie.sh
 ```
 
+### 忘记管理员密码
+
+管理员密码来自环境变量 `ADMIN_PASSWORD`，JWT 签名来自 `ADMIN_JWT_SECRET`。Docker 部署时通常读取项目根目录 `.env`；本地开发时以后端进程实际加载的 `.env` 为准，常见是 `server/.env`。
+
+服务器上可按下面步骤重置：
+
+```bash
+cd /opt/personal-hot-monitor  # 如果仍使用旧目录，则进入 /opt/acg-pulse
+
+# 先备份，避免误改其他密钥
+cp .env ".env.bak.$(date +%Y%m%d%H%M%S)"
+
+# 编辑 ADMIN_PASSWORD；建议同时轮换 ADMIN_JWT_SECRET，让旧 token 全部失效
+nano .env
+# ADMIN_PASSWORD=新的强密码
+# ADMIN_JWT_SECRET=用 openssl rand -hex 32 生成的新随机值
+
+# 重新创建 app 容器，让新的环境变量生效
+sudo docker compose up -d --force-recreate app
+
+# 验证健康状态和登录
+curl http://localhost:3001/api/health
+curl -s -X POST http://localhost:3001/api/admin/login \
+  -H "Content-Type: application/json" \
+  -d '{"password":"新的强密码"}'
+```
+
+本地开发如果设置面板打开后提示登录过期，先清理浏览器里旧的 `game_pulse_admin_token`，再用当前 `.env` 里的 `ADMIN_PASSWORD` 登录。修改本地密码后需要重启后端进程。
+
 ---
 
 ## 已知限制

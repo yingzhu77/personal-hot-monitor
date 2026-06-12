@@ -85,6 +85,10 @@
 
 /* Hide desktop sidebar on mobile */
 @media (max-width: 768px) {
+  .left-column {
+    display: none !important;
+  }
+
   .left-sidebar:not(.mobile-drawer .left-sidebar) {
     display: none !important;
   }
@@ -93,4 +97,3 @@
     display: none !important;
   }
 }
-

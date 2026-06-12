@@ -572,7 +572,7 @@
 
 @media (max-width: 1500px) {
   .game-pulse-layout {
-    grid-template-columns: 200px minmax(500px, 1fr) 300px;
+    grid-template-columns: 200px minmax(0, 1fr) 300px;
   }
 
   .topbar {
@@ -580,7 +580,7 @@
   }
 
   .sidebar-collapsed .topbar {
-    grid-column: 1 / 4;
+    grid-column: 2 / 4;
   }
 
   .main-column {
@@ -605,6 +605,23 @@
   .logo-brand {
     grid-column: 1;
     grid-row: auto;
+  }
+
+  .topbar {
+    order: 1;
+    flex-wrap: wrap;
+  }
+
+  .main-column {
+    order: 2;
+  }
+
+  .left-column {
+    order: 3;
+  }
+
+  .summary-column {
+    order: 4;
   }
 
   .left-column,
@@ -635,8 +652,20 @@
     grid-template-columns: 1fr 1fr;
   }
 
-  .topbar {
-    flex-wrap: wrap;
+  .nav-tabs {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .auto-refresh-chip {
+    flex: 0 0 auto;
+  }
+
+  .top-actions {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    min-width: 0;
   }
 }
 
@@ -652,16 +681,11 @@
   }
 
   .topbar {
-    order: 1;
     align-items: stretch;
   }
 
-  .main-column {
-    order: 2;
-  }
-
   .left-column {
-    order: 3;
+    display: none;
   }
 
   .summary-column {
@@ -688,27 +712,50 @@
     min-width: 0;
   }
 
-  .topbar > .brand-lockup,
   .topbar > .nav-tabs,
+  .topbar > .auto-refresh-chip,
   .topbar > .top-actions {
     flex: 0 0 100%;
     max-width: 100%;
   }
 
+  .auto-refresh-chip {
+    justify-content: center;
+    width: 100%;
+  }
+
   .top-actions {
     display: grid;
-    grid-template-columns: minmax(72px, auto) minmax(58px, 1fr) 38px 38px;
+    grid-template-columns: 1fr 1fr 38px 38px 38px;
     width: 100%;
     gap: 7px;
   }
 
+  .export-btn-wrap {
+    min-width: 0;
+  }
+
+  .export-btn-trigger {
+    width: 38px;
+    height: 38px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .export-btn-trigger span,
+  .export-btn-trigger:not(:has(span)) {
+    font-size: 0;
+  }
+
   .theme-switch {
     grid-column: 1 / -1;
+    grid-row: 2;
     min-width: 0;
   }
 
   .top-actions > .icon-button:last-child {
-    grid-column: auto;
+    grid-column: 5;
+    grid-row: 1;
   }
 
   .time-chip,
