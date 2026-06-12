@@ -242,6 +242,10 @@
   padding: 12px;
 }
 
+.theme-dark .feed-panel {
+  background: rgba(8, 18, 36, 0.24);
+}
+
 .feed-toolbar {
   flex-wrap: wrap;
   padding: 2px 2px 12px;
@@ -276,6 +280,11 @@
   background: var(--panel-soft);
   padding: 0 11px;
   color: var(--text-soft);
+}
+
+.theme-dark .search-field,
+.theme-dark .feed-controls select {
+  background: rgba(12, 26, 50, 0.2);
 }
 
 .search-field input,
@@ -335,9 +344,17 @@
   transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
 
+.theme-dark .story-card {
+  background: rgba(12, 26, 50, 0.18);
+}
+
 .story-card:hover {
   border-color: var(--stroke-strong);
   background: var(--panel-hover);
+}
+
+.theme-dark .story-card:hover {
+  background: rgba(18, 38, 68, 0.38);
 }
 
 .story-card.importance-high { border-left-color: var(--pink); }

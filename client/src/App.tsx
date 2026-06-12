@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle2, CircleAlert, Filter } from 'lucide-react';
 import { cn } from './lib/utils';
@@ -26,6 +26,7 @@ function App() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
+  const leftColumnRef = useRef<HTMLDivElement | null>(null);
 
   // Detect mobile viewport
   useEffect(() => {
@@ -45,6 +46,25 @@ function App() {
   const openAdmin = useCallback(() => admin.setAdminOpen(true), [admin.setAdminOpen]);
   const closeMobileDrawer = useCallback(() => setMobileDrawerOpen(false), []);
   const openMobileDrawer = useCallback(() => setMobileDrawerOpen(true), []);
+  useEffect(() => {
+    const el = leftColumnRef.current;
+    if (!el) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if (maxScroll <= 0) return;
+
+      const nextScroll = Math.max(0, Math.min(maxScroll, el.scrollTop + event.deltaY));
+      if (nextScroll === el.scrollTop) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      el.scrollTop = nextScroll;
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
   const handleToggleFavorites = useCallback(() => {
     setShowFavorites(prev => {
       if (!prev) {
@@ -69,7 +89,7 @@ function App() {
     >
       <div className="scene-scrim" />
       <div className={`game-pulse-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-        <div className="left-column">
+        <div className="left-column" ref={leftColumnRef}>
           <LogoBrand />
           <GameFilterPanel
           games={publicData.games}
@@ -146,7 +166,13 @@ function App() {
           )}
         </section>
 
-        <SummaryColumn stats={publicData.stats} sources={publicData.sources} health={publicData.health} stories={publicData.stories} />
+        <SummaryColumn
+          stats={publicData.stats}
+          sources={publicData.sources}
+          health={publicData.health}
+          stories={publicData.stories}
+          hotStories={publicData.summaryStories}
+        />
       </div>
 
       {/* Mobile Filter FAB */}

@@ -8,6 +8,7 @@ type ShowToast = (type: 'success' | 'error', message: string) => void;
 
 export function usePublicData(showToast: ShowToast) {
   const [stories, setStories] = useState<Story[]>([]);
+  const [summaryStories, setSummaryStories] = useState<Story[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [stats, setStats] = useState<PublicStats | null>(null);
   const [facets, setFacets] = useState<StoryFacets>({ byGame: {}, byCategory: {}, byFollowCategory: {}, byImportance: {} });
@@ -78,12 +79,20 @@ export function usePublicData(showToast: ShowToast) {
       if (filters.importance) apiFilters.importance = filters.importance;
       if (filters.q) apiFilters.q = filters.q;
 
-      const [storiesData, statsData, sourcesData] = await Promise.all([
+      const summaryFilters: Record<string, string | number | undefined> = { limit: 60, page: 1, followGroup: 'game' };
+      const summaryGames = sourceFilter.filter(s => !/^\d+$/.test(s));
+      if (summaryGames.length > 0) {
+        summaryFilters.game = summaryGames.length === 1 ? summaryGames[0] : summaryGames.join(',');
+      }
+
+      const [storiesData, summaryStoriesData, statsData, sourcesData] = await Promise.all([
         publicApi.getStories(apiFilters),
+        publicApi.getStories(summaryFilters),
         publicApi.getStats(),
         publicApi.getSources()
       ]);
       setStories(storiesData.data);
+      setSummaryStories(summaryStoriesData.data);
       setFacets(storiesData.facets);
       setPagination(storiesData.pagination);
       setStats(statsData);
@@ -146,6 +155,7 @@ export function usePublicData(showToast: ShowToast) {
 
   return {
     stories,
+    summaryStories,
     sources,
     stats,
     facets,

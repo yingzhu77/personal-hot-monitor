@@ -33,6 +33,26 @@ export interface FeedPanelProps {
 }
 
 export function FeedPanel(props: FeedPanelProps) {
+  // Normal feed state is declared before any conditional return to keep hook order stable.
+  const favoriteSet = useMemo(() => new Set(props.favorites), [props.favorites]);
+  const displayStories = useMemo(
+    () => props.showFavorites ? props.stories.filter(s => favoriteSet.has(s.id)) : props.stories,
+    [props.stories, props.showFavorites, favoriteSet]
+  );
+
+  // Debounce search input — local state for instant display, delayed filter update
+  const [searchQuery, setSearchQuery] = useState(props.filters.q);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => setSearchQuery(props.filters.q), [props.filters.q]);
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      props.setFilters(prev => ({ ...prev, q: value }));
+    }, 300);
+  };
+  useEffect(() => () => clearTimeout(searchTimerRef.current), []);
+
   // Hot search mode
   if (props.showHotPanel) {
     return (
@@ -60,25 +80,6 @@ export function FeedPanel(props: FeedPanelProps) {
   }
 
   // Normal feed mode
-  const favoriteSet = useMemo(() => new Set(props.favorites), [props.favorites]);
-  const displayStories = useMemo(
-    () => props.showFavorites ? props.stories.filter(s => favoriteSet.has(s.id)) : props.stories,
-    [props.stories, props.showFavorites, favoriteSet]
-  );
-
-  // Debounce search input — local state for instant display, delayed filter update
-  const [searchQuery, setSearchQuery] = useState(props.filters.q);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => setSearchQuery(props.filters.q), [props.filters.q]);
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value);
-    clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => {
-      props.setFilters(prev => ({ ...prev, q: value }));
-    }, 300);
-  };
-  useEffect(() => () => clearTimeout(searchTimerRef.current), []);
-
   return (
     <section className="feed-panel glass-panel">
       <div className="feed-toolbar">

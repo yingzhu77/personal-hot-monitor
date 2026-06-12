@@ -8,20 +8,45 @@ import { SourceIcon } from './SourceIcon';
 import { SummaryMetric } from './SummaryMetric';
 import { Tag } from './Tag';
 
+const SUMMARY_TZ = 'Asia/Shanghai';
+
+function dateKeyInTz(value: string | null | undefined): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SUMMARY_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const y = parts.find(part => part.type === 'year')?.value || '';
+  const m = parts.find(part => part.type === 'month')?.value || '';
+  const d = parts.find(part => part.type === 'day')?.value || '';
+  return `${y}-${m}-${d}`;
+}
+
 export interface SummaryColumnProps {
   stats: PublicStats | null;
   sources: Source[];
   health: { healthy: number; failed: number; unknown: number };
   stories: Story[];
+  hotStories: Story[];
 }
 
 export function SummaryColumn(props: SummaryColumnProps) {
-  // 今日热门：高重要性 + 官方源的故事
+  // 今日热门：游戏资讯来源组中的最新 10 条；选中游戏时只看该游戏。
   const hotStories = useMemo(() => {
-    return props.stories
-      .filter(s => s.importance === 'high' && s.sources.some(src => src.isOfficial))
-      .slice(0, 8);
-  }, [props.stories]);
+    const todayKey = dateKeyInTz(new Date().toISOString());
+    return [...props.hotStories]
+      .filter(story => dateKeyInTz(story.publishedAt || story.createdAt) === todayKey)
+      .sort((a, b) => {
+        const bTime = new Date(b.publishedAt || b.createdAt).getTime();
+        const aTime = new Date(a.publishedAt || a.createdAt).getTime();
+        return bTime - aTime;
+      })
+      .slice(0, 10);
+  }, [props.hotStories]);
 
   return (
     <aside className="summary-column">
@@ -33,7 +58,7 @@ export function SummaryColumn(props: SummaryColumnProps) {
         <div className="metric-grid">
           <SummaryMetric label="情报总数" value={props.stats?.total || 0} note="公开主流" tone="blue" />
           <SummaryMetric label="高重要情报" value={props.stats?.high || 0} note="high" tone="pink" />
-          <SummaryMetric label="今日热门" value={hotStories.length} note="官方高重要" tone="cyan" />
+          <SummaryMetric label="今日热门" value={hotStories.length} note="游戏资讯" tone="cyan" />
           <SummaryMetric label="活跃来源" value={props.sources.length} note={`${props.health.healthy} 健康`} tone="amber" />
           <SummaryMetric label="AI 处理条数" value={props.stats?.total || 0} note="含规则兜底" tone="violet" />
           <SummaryMetric label="去重率" value={estimateDedupRate(props.stories)} suffix="%" note="多源合并" tone="green" />
