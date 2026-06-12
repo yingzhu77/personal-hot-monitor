@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { hasRecentData, loadTopics, getLastFetchTime } from '../db/communityDb.js';
+import { getStalenessInfo, loadTopics } from '../db/communityDb.js';
 import { refreshCommunityData } from '../services/communityService.js';
 import { asyncHandler } from './asyncHandler.js';
 
@@ -16,16 +16,16 @@ const VALID_SENTIMENTS = new Set(['positive', 'negative', 'neutral']);
 const VALID_SOURCES = new Set(['bilibili', 'nga', 'xiaoheihe']);
 
 router.get('/topics', asyncHandler(async (req, res) => {
-  let isStale = false;
+  // Check staleness without blocking — always return DB snapshot immediately
+  let isRefreshing = false;
+  const { isStale, lastFetchTime } = await getStalenessInfo();
 
-  try {
-    const fresh = await hasRecentData();
-    if (!fresh) {
-      await refreshCommunityData();
-    }
-  } catch (err) {
-    console.error('[Community] Refresh failed, serving stale data:', err);
-    isStale = true;
+  // Fire background refresh if data is stale (fire-and-forget, deduped by communityService)
+  if (isStale) {
+    isRefreshing = true;
+    refreshCommunityData().catch(err => {
+      console.error('[Community] Background refresh failed:', err);
+    });
   }
 
   const { sentiment, category, source, page = '1', limit = '100' } = req.query;
@@ -54,8 +54,6 @@ router.get('/topics', asyncHandler(async (req, res) => {
     totalHeat += t.heatScore;
   }
 
-  const lastFetchTime = await getLastFetchTime();
-
   res.json({
     data: paged,
     pagination: {
@@ -70,7 +68,9 @@ router.get('/topics', asyncHandler(async (req, res) => {
       totalTopics: allFiltered.length
     },
     lastUpdated: lastFetchTime > 0 ? new Date(lastFetchTime).toISOString() : null,
-    stale: isStale || undefined
+    isRefreshing,
+    isStale,
+    stale: isStale || undefined  // backwards compat
   });
 }));
 

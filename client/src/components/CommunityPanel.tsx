@@ -15,6 +15,7 @@ export function CommunityPanel() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [summary, setSummary] = useState<{ sentimentCounts: { positive: number; negative: number; neutral: number }; avgHeat: number } | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -27,6 +28,12 @@ export function CommunityPanel() {
       .then(data => {
         setTopics(data.data || []);
         setSummary(data.summary || null);
+        // If server reports background refresh in progress, keep polling
+        if (data.isRefreshing) {
+          setIsRefreshing(true);
+        } else {
+          setIsRefreshing(false);
+        }
       })
       .catch(err => {
         setTopics([]);
@@ -37,6 +44,13 @@ export function CommunityPanel() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Poll while server reports background refresh in progress
+  useEffect(() => {
+    if (!isRefreshing) return;
+    const timer = setTimeout(fetchData, 5000);
+    return () => clearTimeout(timer);
+  }, [isRefreshing, fetchData]);
 
   // Debounced socket refresh — prevents rapid-fire refetches
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -63,8 +77,10 @@ export function CommunityPanel() {
     <section className="glass-panel community-panel">
       <div className="panel-heading">
         <h2>社区热点风向</h2>
-        {loading ? (
+        {loading && topics.length === 0 ? (
           <span style={{ fontSize: '0.75rem', color: 'var(--text-soft)' }}>加载中...</span>
+        ) : isRefreshing ? (
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-soft)' }}>刷新中...</span>
         ) : (
           <TrendingUp className="h-4 w-4" />
         )}
@@ -117,18 +133,25 @@ export function CommunityPanel() {
       </div>
 
       <div className="community-topic-list">
-        {loading ? (
+        {loading && topics.length === 0 ? (
           <div className="empty-state">正在获取社区热点...</div>
-        ) : error ? (
+        ) : error && topics.length === 0 ? (
           <div className="empty-state" style={{ cursor: 'pointer' }} onClick={fetchData}>
             加载失败: {error} · 点击重试
           </div>
         ) : filtered.length === 0 ? (
           <div className="empty-state">暂无匹配的社区话题</div>
         ) : (
-          filtered.map((topic, index) => (
-            <CommunityTopicCard key={topic.id} topic={topic} index={index} />
-          ))
+          <>
+            {isRefreshing && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-soft)', padding: '0 0 8px', textAlign: 'center' }}>
+                数据正在后台刷新...
+              </div>
+            )}
+            {filtered.map((topic, index) => (
+              <CommunityTopicCard key={topic.id} topic={topic} index={index} />
+            ))}
+          </>
         )}
       </div>
     </section>

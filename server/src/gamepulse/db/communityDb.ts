@@ -134,6 +134,24 @@ export async function getLastFetchTime(): Promise<number> {
   return latest?.fetchedAt.getTime() ?? 0;
 }
 
+export interface StalenessInfo {
+  hasData: boolean;
+  isStale: boolean;
+  lastFetchTime: number;
+}
+
+/** Check if data exists and whether it is stale (beyond TTL) */
+export async function getStalenessInfo(): Promise<StalenessInfo> {
+  const latest = await prisma.communityTopic.findFirst({
+    orderBy: { fetchedAt: 'desc' },
+    select: { fetchedAt: true }
+  });
+  if (!latest) return { hasData: false, isStale: true, lastFetchTime: 0 };
+  const lastFetchTime = latest.fetchedAt.getTime();
+  const isStale = Date.now() - lastFetchTime >= CACHE_TTL_MS;
+  return { hasData: true, isStale, lastFetchTime };
+}
+
 /** Get IDs of topics already in DB (for incremental update) */
 export async function getExistingIds(ids: string[]): Promise<Set<string>> {
   const rows = await prisma.communityTopic.findMany({
