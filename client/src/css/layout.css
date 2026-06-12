@@ -67,7 +67,7 @@
 }
 
 .game-pulse-layout.sidebar-collapsed {
-  grid-template-columns: 50px minmax(0, 1fr) 320px;
+  grid-template-columns: 0px minmax(0, 1fr) 320px;
 }
 
 .glass-panel {
@@ -136,18 +136,18 @@
 
 .sidebar-expand-btn {
   position: fixed;
-  left: 14px;
-  top: 84px;
+  left: max(44px, calc((100vw - 1840px) / 2 + 44px));
+  top: 106px;
   z-index: 140;
   display: inline-grid;
   place-items: center;
   width: 36px;
   height: 36px;
-  border: 1px solid var(--stroke);
+  border: 1px solid color-mix(in srgb, var(--blue) 50%, var(--stroke));
   border-radius: 8px;
-  background: var(--panel-strong);
-  color: var(--text-main);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: color-mix(in srgb, var(--panel-strong) 86%, var(--blue) 14%);
+  color: var(--blue);
+  box-shadow: 0 10px 28px rgba(20, 64, 142, 0.24);
   transition: background 180ms ease, border-color 180ms ease;
 }
 

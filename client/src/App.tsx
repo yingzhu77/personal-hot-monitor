@@ -97,6 +97,12 @@ function App() {
         />
         </div>
 
+        {!isMobile && sidebarCollapsed && (
+          <button className="sidebar-expand-btn" onClick={toggleSidebar} aria-label="展开筛选" title="展开筛选">
+            <Filter className="h-4 w-4" />
+          </button>
+        )}
+
         <TopBar
           theme={theme}
           setTheme={setTheme}

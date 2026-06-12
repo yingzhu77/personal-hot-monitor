@@ -580,7 +580,7 @@
   }
 
   .sidebar-collapsed .topbar {
-    grid-column: 2 / 4;
+    grid-column: 1 / 4;
   }
 
   .main-column {

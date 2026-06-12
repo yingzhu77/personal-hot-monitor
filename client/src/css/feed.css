@@ -14,7 +14,7 @@
 }
 
 .sidebar-collapsed .topbar {
-  grid-column: 2 / 4;
+  grid-column: 1 / 4;
 }
 
 /* Logo Brand - left sidebar top */
@@ -246,6 +246,10 @@
   flex-wrap: wrap;
   padding: 2px 2px 12px;
   border-bottom: 1px solid var(--stroke);
+}
+
+.sidebar-collapsed .feed-toolbar {
+  padding-left: 66px;
 }
 
 .feed-toolbar p {

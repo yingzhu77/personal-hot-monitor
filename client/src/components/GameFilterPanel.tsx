@@ -46,11 +46,6 @@ export function GameFilterPanel(props: GameFilterPanelProps) {
 
   return (
     <>
-      {!props.isInDrawer && props.collapsed && (
-        <button className="sidebar-expand-btn" onClick={props.onToggleCollapse} aria-label="展开筛选" title="展开筛选">
-          <Filter className="h-4 w-4" />
-        </button>
-      )}
       <aside className={`left-sidebar glass-panel${props.isInDrawer ? ' drawer-mode' : ''}`}>
         <div className="panel-heading">
           <h2>
