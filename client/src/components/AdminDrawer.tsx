@@ -1,8 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Lock, LogOut, Play, Plus, RefreshCw, RotateCcw, X } from 'lucide-react';
 import type { AnalysisQueueOverview, Source } from '../services/api';
-import type { ReanalyzeProgress } from '../services/socket';
-import { cn } from '../lib/utils';
 
 export interface SourceDraft {
   name: string;
@@ -29,7 +27,6 @@ export interface AdminDrawerProps {
   onSeedDefaults: () => void;
   onRunCheck: () => void;
   onReanalyzeAll: () => void;
-  reanalyzeProgress: ReanalyzeProgress | null;
   analysisQueue: AnalysisQueueOverview | null;
   onRetryAnalysisTask: (id: string) => void;
   onRetryFailedAnalysisTasks: () => void;
@@ -91,30 +88,15 @@ export function AdminDrawer(props: AdminDrawerProps) {
                     <Play className="h-4 w-4" />
                     手动检查
                   </button>
-                  <button onClick={props.onReanalyzeAll} className="action-button" disabled={!!props.reanalyzeProgress}>
-                    <RefreshCw className={cn('h-4 w-4', props.reanalyzeProgress && 'spin-active')} />
-                    {props.reanalyzeProgress ? `分类中 ${props.reanalyzeProgress.percent}%` : '重新分类'}
+                  <button onClick={props.onReanalyzeAll} className="action-button">
+                    <RefreshCw className="h-4 w-4" />
+                    重新分类
                   </button>
                   <button onClick={props.onLogout} className="action-button">
                     <LogOut className="h-4 w-4" />
                     退出
                   </button>
                 </div>
-                {props.reanalyzeProgress && (
-                  <div className="drawer-card" style={{ padding: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span>重新分类进度</span>
-                      <span>{props.reanalyzeProgress.analyzed + props.reanalyzeProgress.failed}/{props.reanalyzeProgress.total}</span>
-                    </div>
-                    <div className="health-track" style={{ height: '8px' }}>
-                      <span style={{ width: `${props.reanalyzeProgress.percent}%`, transition: 'width 0.3s' }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.75rem', color: 'var(--text-soft)' }}>
-                      <span>已分析: {props.reanalyzeProgress.analyzed}</span>
-                      <span>失败: {props.reanalyzeProgress.failed}</span>
-                    </div>
-                  </div>
-                )}
 
                 <div className="drawer-card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>

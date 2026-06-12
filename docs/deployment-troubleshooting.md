@@ -133,6 +133,7 @@ SOURCE_CHECK_CONCURRENCY=5
 BILIBILI_DIRECT_API_FALLBACK=true
 BILIBILI_DIRECT_API_TIMEOUT_MS=30000
 BILIBILI_REQUEST_INTERVAL_MS=6000
+HEALTH_LOG_RETENTION_DAYS=30
 EOF
 
 # 3. 启动服务
@@ -156,6 +157,31 @@ sudo docker compose up -d --build
 ```
 
 ---
+
+## 环境变量加载路径
+
+| 场景 | .env 位置 | 加载方式 |
+|------|-----------|----------|
+| 本地开发（后端） | `server/.env` | `dotenv.config()` 在 `server/src/index.ts` 中加载 |
+| Docker 部署 | 项目根目录 `.env` | `docker-compose.yml` 的 `${VAR}` 语法读取，传入容器环境变量 |
+
+修改 `ADMIN_PASSWORD` 或 `ADMIN_JWT_SECRET` 后：
+- **Docker**：`sudo docker compose up -d --force-recreate app`
+- **本地开发**：重启后端进程（`npm run dev` 会自动重载）
+
+## 配置预检
+
+部署前运行配置检查脚本，避免 `docker compose config` 因缺少变量报错：
+
+```bash
+bash scripts/check-config.sh        # 检查根目录 .env
+bash scripts/check-config.sh server/.env  # 检查本地开发 .env
+```
+
+脚本检查项：
+- `ADMIN_PASSWORD` 是否已设置且不是默认值
+- `ADMIN_JWT_SECRET` 是否已设置、长度 >= 32 字符
+- AI Provider key 是否已配置
 
 ## 常用运维命令
 
@@ -189,12 +215,21 @@ bash save-cookie.sh
 
 ### 忘记管理员密码
 
-管理员密码来自环境变量 `ADMIN_PASSWORD`，JWT 签名来自 `ADMIN_JWT_SECRET`。Docker 部署时通常读取项目根目录 `.env`；本地开发时以后端进程实际加载的 `.env` 为准，常见是 `server/.env`。
+管理员密码来自环境变量 `ADMIN_PASSWORD`，JWT 签名来自 `ADMIN_JWT_SECRET`。
 
-服务器上可按下面步骤重置：
+**推荐方式**：使用重置脚本（自动备份、不打印敏感值）：
 
 ```bash
-cd /opt/personal-hot-monitor  # 如果仍使用旧目录，则进入 /opt/acg-pulse
+cd /opt/personal-hot-monitor
+bash scripts/reset-admin-password.sh
+# 按提示输入新密码，脚本会自动生成新的 JWT_SECRET 并备份旧 .env
+sudo docker compose up -d --force-recreate app
+```
+
+**手动方式**：
+
+```bash
+cd /opt/personal-hot-monitor
 
 # 先备份，避免误改其他密钥
 cp .env ".env.bak.$(date +%Y%m%d%H%M%S)"

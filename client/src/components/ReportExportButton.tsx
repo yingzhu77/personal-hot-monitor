@@ -2,6 +2,30 @@ import { useState } from 'react';
 import { Download, FileText, Calendar } from 'lucide-react';
 import { publicApi } from '../services/api';
 
+const REPORT_TZ = 'Asia/Shanghai';
+
+function todayInTz(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: REPORT_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date());
+  const y = parts.find(p => p.type === 'year')!.value;
+  const m = parts.find(p => p.type === 'month')!.value;
+  const d = parts.find(p => p.type === 'day')!.value;
+  return `${y}-${m}-${d}`;
+}
+
+function daysAgoStr(days: number): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: REPORT_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date(Date.now() - days * 86400000));
+  const y = parts.find(p => p.type === 'year')!.value;
+  const m = parts.find(p => p.type === 'month')!.value;
+  const d = parts.find(p => p.type === 'day')!.value;
+  return `${y}-${m}-${d}`;
+}
+
 export interface ReportExportButtonProps {
   currentGame?: string;
 }
@@ -9,17 +33,14 @@ export interface ReportExportButtonProps {
 export function ReportExportButton({ currentGame }: ReportExportButtonProps) {
   const [open, setOpen] = useState(false);
 
-  const today = new Date().toISOString().slice(0, 10);
-
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - 6);
-  const weekStartStr = weekStart.toISOString().slice(0, 10);
+  const today = todayInTz();
+  const weekStartStr = daysAgoStr(6);
 
   function downloadReport(type: 'daily' | 'weekly', date?: string, weekStart?: string) {
     const url = publicApi.exportReportUrl({
       type,
-      date: date || today,
-      weekStart: weekStart || weekStartStr,
+      date,
+      weekStart,
       game: currentGame
     });
     window.open(url, '_blank');

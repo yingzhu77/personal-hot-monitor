@@ -223,7 +223,6 @@ function App() {
         onSeedDefaults={admin.handleSeedDefaults}
         onRunCheck={admin.handleRunCheck}
         onReanalyzeAll={admin.handleReanalyzeAll}
-        reanalyzeProgress={admin.reanalyzeProgress}
         analysisQueue={admin.analysisQueue}
         onRetryAnalysisTask={admin.handleRetryAnalysisTask}
         onRetryFailedAnalysisTasks={admin.handleRetryFailedAnalysisTasks}

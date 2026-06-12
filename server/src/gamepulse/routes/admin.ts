@@ -3,11 +3,12 @@ import type { Server } from 'socket.io';
 import { prisma } from '../../db.js';
 import { createAdminToken, isValidAdminPassword, requireAdmin } from '../auth.js';
 import { seedDefaultSources } from '../defaultSources.js';
-import { ensureAnalysis } from '../ai/analyzer.js';
 import {
   getAnalysisQueueOverview,
   retryAnalysisTask,
-  retryFailedAnalysisTasks
+  retryFailedAnalysisTasks,
+  reanalyzeItem,
+  reanalyzeAll
 } from '../ai/analysisQueue.js';
 import { runGamePulseCheck } from '../jobs/checker.js';
 import { rebuildFTS5, isFTS5Ready } from '../search.js';
@@ -220,15 +221,11 @@ export function createAdminRouter(io: Server): Router {
   router.post('/items/:id/analyze', async (req, res) => {
     const item = await prisma.feedItem.findUnique({
       where: { id: req.params.id },
-      include: { source: true }
+      select: { id: true }
     });
     if (!item) return res.status(404).json({ error: 'Item not found' });
-    await ensureAnalysis(item, { force: true });
-    const updated = await prisma.feedItem.findUnique({
-      where: { id: item.id },
-      include: { source: true, analysis: true }
-    });
-    res.json(updated);
+    await reanalyzeItem(item.id, io);
+    res.json({ status: 'enqueued', feedItemId: item.id });
   });
 
   router.post('/check', async (_req, res) => {
@@ -279,50 +276,11 @@ export function createAdminRouter(io: Server): Router {
   router.post('/reanalyze-all', async (req, res) => {
     try {
       const { limit } = validateOrThrow(ReanalyzeSchema, req.body, 'reanalyze');
-      const items = await prisma.feedItem.findMany({
-        where: { hidden: false },
-        include: { source: true, analysis: true },
-        orderBy: { createdAt: 'desc' },
-        take: limit
-      });
-
-      // 立即返回任务开始
-      res.json({ total: items.length, status: 'started' });
-
-      // 后台逐条执行重新分类，带延迟避免限流
-      let analyzed = 0;
-      let failed = 0;
-      const ITEM_DELAY = 3000;
-      for (let i = 0; i < items.length; i++) {
-        try {
-          await ensureAnalysis(items[i], { force: true });
-          analyzed++;
-        } catch (error) {
-          console.error(`[Reanalyze] Failed for item ${items[i].id}:`, error);
-          failed++;
-        }
-
-        // 每 5 条推送进度
-        if ((analyzed + failed) % 5 === 0 || analyzed + failed === items.length) {
-          io.emit('reanalyze:progress', {
-            total: items.length,
-            analyzed,
-            failed,
-            percent: Math.round(((analyzed + failed) / items.length) * 100)
-          });
-        }
-
-        // 逐条延迟避免 API 限流
-        if (i < items.length - 1) {
-          await new Promise(r => setTimeout(r, ITEM_DELAY));
-        }
-      }
-
-      // 推送完成事件
-      io.emit('reanalyze:done', { total: items.length, analyzed, failed });
+      const count = await reanalyzeAll(limit, io);
+      res.json({ total: count, status: 'enqueued' });
     } catch (error) {
       console.error('Reanalyze all failed:', error);
-      io.emit('reanalyze:error', { error: 'Failed to reanalyze' });
+      res.status(500).json({ error: 'Failed to enqueue reanalyze tasks' });
     }
   });
 

@@ -3,7 +3,7 @@ import { prisma } from '../../db.js';
 import { sendFeedItemEmail } from '../../services/email.js';
 import { ensureAnalysis } from './analyzer.js';
 
-const ANALYSIS_BATCH_DELAY_MS = 5000;
+const DEFAULT_ANALYSIS_BATCH_DELAY_MS = 5000;
 const DEFAULT_MAX_RETRIES = 3;
 
 let processing = false;
@@ -34,6 +34,62 @@ export async function enqueueAnalysisTask(feedItemId: string, io?: Server): Prom
   void processAnalysisQueue(currentIo);
 }
 
+export async function reanalyzeItem(feedItemId: string, io?: Server): Promise<void> {
+  currentIo = io || currentIo;
+  const existingOpenTask = await prisma.analysisTask.findFirst({
+    where: {
+      feedItemId,
+      status: { in: ['pending', 'running'] }
+    },
+    select: { id: true }
+  });
+
+  if (!existingOpenTask) {
+    await prisma.analysisTask.create({
+      data: {
+        feedItemId,
+        status: 'pending',
+        maxRetries: getMaxRetries(),
+        nextRunAt: new Date()
+      }
+    });
+  }
+  void processAnalysisQueue(currentIo);
+}
+
+export async function reanalyzeAll(limit: number, io?: Server): Promise<number> {
+  currentIo = io || currentIo;
+  const items = await prisma.feedItem.findMany({
+    where: { hidden: false },
+    select: { id: true },
+    orderBy: { createdAt: 'desc' },
+    take: limit
+  });
+
+  if (items.length === 0) return 0;
+  const itemIds = items.map(item => item.id);
+  const existingOpenTasks = await prisma.analysisTask.findMany({
+    where: {
+      feedItemId: { in: itemIds },
+      status: { in: ['pending', 'running'] }
+    },
+    select: { feedItemId: true }
+  });
+  const openFeedItemIds = new Set(existingOpenTasks.map(task => task.feedItemId));
+
+  const taskData = items.filter(item => !openFeedItemIds.has(item.id)).map(item => ({
+    feedItemId: item.id,
+    status: 'pending' as const,
+    maxRetries: getMaxRetries(),
+    nextRunAt: new Date()
+  }));
+
+  if (taskData.length === 0) return 0;
+  await prisma.analysisTask.createMany({ data: taskData });
+  void processAnalysisQueue(currentIo);
+  return taskData.length;
+}
+
 export function startAnalysisQueueWorker(io: Server): void {
   currentIo = io;
   void recoverStaleRunningTasks().then(() => processAnalysisQueue(io));
@@ -54,7 +110,7 @@ export async function processAnalysisQueue(io?: Server): Promise<void> {
 
       const hasMore = await hasRunnableTask();
       if (hasMore) {
-        await new Promise(resolve => setTimeout(resolve, ANALYSIS_BATCH_DELAY_MS));
+        await new Promise(resolve => setTimeout(resolve, getBatchDelayMs()));
       }
     }
   } finally {
@@ -134,30 +190,48 @@ export async function retryFailedAnalysisTasks(io?: Server): Promise<number> {
 
 async function claimNextTask(): Promise<{ id: string; feedItemId: string } | null> {
   const now = new Date();
-  const task = await prisma.analysisTask.findFirst({
+  const maxRetries = getMaxRetries();
+
+  // Find the best candidate, then atomically claim it with a conditional UPDATE.
+  const candidate = await prisma.analysisTask.findFirst({
     where: {
       OR: [
         { status: 'pending', nextRunAt: { lte: now } },
-        { status: 'failed', nextRunAt: { lte: now }, retryCount: { lt: getMaxRetries() } }
+        { status: 'failed', nextRunAt: { lte: now }, retryCount: { lt: maxRetries } }
       ]
     },
     orderBy: [{ nextRunAt: 'asc' }, { createdAt: 'asc' }],
-    select: { id: true, feedItemId: true }
+    select: { id: true }
   });
 
-  if (!task) return null;
+  if (!candidate) return null;
 
+  // Atomic claim: only succeeds if the task is still in a claimable state.
+  // Prevents concurrent workers from double-claiming the same task.
   try {
-    return await prisma.analysisTask.update({
-      where: { id: task.id },
+    const claimed = await prisma.analysisTask.updateMany({
+      where: {
+        id: candidate.id,
+        OR: [
+          { status: 'pending' },
+          { status: 'failed', retryCount: { lt: maxRetries } }
+        ]
+      },
       data: {
         status: 'running',
         startedAt: now,
         completedAt: null,
         failedAt: null
-      },
+      }
+    });
+
+    if (claimed.count === 0) return null;
+
+    const task = await prisma.analysisTask.findUnique({
+      where: { id: candidate.id },
       select: { id: true, feedItemId: true }
     });
+    return task;
   } catch {
     return null;
   }
@@ -175,7 +249,7 @@ async function runTask(taskId: string, feedItemId: string, io?: Server): Promise
     return;
   }
 
-  const result = await ensureAnalysis(item);
+  const result = await ensureAnalysis(item, { force: true });
   if (result.status === 'failed') {
     await markTaskFailed(taskId, result.error || 'Unknown AI analysis error', started);
     return;
@@ -279,6 +353,10 @@ function clearRetryTimer(): void {
   retryTimer = undefined;
 }
 
+export function clearRetryTimerForTest(): void {
+  clearRetryTimer();
+}
+
 async function recoverStaleRunningTasks(): Promise<void> {
   await prisma.analysisTask.updateMany({
     where: { status: 'running' },
@@ -293,6 +371,11 @@ async function recoverStaleRunningTasks(): Promise<void> {
 function getMaxRetries(): number {
   const parsed = Number(process.env.ANALYSIS_TASK_MAX_RETRIES);
   return Number.isFinite(parsed) && parsed >= 0 ? Math.min(parsed, 10) : DEFAULT_MAX_RETRIES;
+}
+
+function getBatchDelayMs(): number {
+  const parsed = Number(process.env.ANALYSIS_BATCH_DELAY_MS);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_ANALYSIS_BATCH_DELAY_MS;
 }
 
 function retryDelayMs(retryCount: number): number {

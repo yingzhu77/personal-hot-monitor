@@ -51,6 +51,9 @@ cd personal-hot-monitor
 cp .env.production.example .env
 nano .env  # 填写 ADMIN_PASSWORD、ADMIN_JWT_SECRET、AI Provider Key
 
+# 预检配置（可选，但推荐）
+bash scripts/check-config.sh
+
 # 启动
 docker compose up -d --build
 ```
@@ -89,6 +92,18 @@ cd client && npm install && npm run dev
 访问 `http://localhost:5173`
 
 > **首次部署注意**：服务启动时会校验 `ADMIN_PASSWORD` 和 `ADMIN_JWT_SECRET`，若未设置或使用默认值将拒绝启动。
+
+### 运维脚本
+
+```bash
+# 预检 .env 配置（避免启动后才报错）
+bash scripts/check-config.sh
+
+# 安全重置管理员密码（自动备份、不打印敏感值）
+bash scripts/reset-admin-password.sh
+```
+
+更多部署踩坑和运维命令见 [docs/deployment-troubleshooting.md](docs/deployment-troubleshooting.md)。
 
 ## 环境变量
 

@@ -1,6 +1,13 @@
 const API_BASE = '/api';
 const TOKEN_KEY = 'game_pulse_admin_token';
 
+export class UnauthorizedError extends Error {
+  constructor() {
+    super('Unauthorized');
+    this.name = 'UnauthorizedError';
+  }
+}
+
 export interface Source {
   id: string;
   name: string;
@@ -193,6 +200,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      throw new UnauthorizedError();
+    }
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
     throw new Error(error.error || 'Request failed');
   }
@@ -349,7 +360,7 @@ export const adminApi = {
     method: 'POST',
     headers: authHeaders()
   }),
-  reanalyzeAll: (limit: number = 100) => request<{ total: number; analyzed: number; failed: number }>('/admin/reanalyze-all', {
+  reanalyzeAll: (limit: number = 100) => request<{ total: number; status: string }>('/admin/reanalyze-all', {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ limit })

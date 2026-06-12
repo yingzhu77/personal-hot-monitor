@@ -49,11 +49,12 @@ router.get('/items', async (req, res) => {
     }
 
     // FTS5 search: use FTS if available, fallback to LIKE
+    const FTS_RECALL_LIMIT = 10000;
     let ftsIds: string[] | null = null;
     if (q) {
       const ftsReady = await isFTS5Ready();
       if (ftsReady) {
-        const ftsResult = await searchFeedItems(String(q), { limit: 1000, offset: 0 });
+        const ftsResult = await searchFeedItems(String(q), { limit: FTS_RECALL_LIMIT, offset: 0 });
         ftsIds = ftsResult.feedItemIds;
         if (ftsIds.length === 0) {
           // FTS returned no results, return empty
@@ -74,7 +75,7 @@ router.get('/items', async (req, res) => {
     applyAnalysisFilters(where, { category, importance, visibility });
     applyLowValueNoticeFilter(where, visibility);
 
-    const [data, total] = await Promise.all([
+    const [data, prismaTotal] = await Promise.all([
       prisma.feedItem.findMany({
         where,
         orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
@@ -96,6 +97,9 @@ router.get('/items', async (req, res) => {
       }),
       prisma.feedItem.count({ where })
     ]);
+
+    // Prisma count is accurate for the filtered result set (bounded by FTS_RECALL_LIMIT).
+    const total = prismaTotal;
 
     res.json({
       data: data.map(toPublicFeedItem),
@@ -155,11 +159,12 @@ router.get('/stories', async (req, res) => {
     }
 
     // FTS5 search: use FTS if available, fallback to LIKE
+    const FTS_RECALL_LIMIT = 10000;
     let ftsIds: string[] | null = null;
     if (q) {
       const ftsReady = await isFTS5Ready();
       if (ftsReady) {
-        const ftsResult = await searchFeedItems(String(q), { limit: 1000, offset: 0 });
+        const ftsResult = await searchFeedItems(String(q), { limit: FTS_RECALL_LIMIT, offset: 0 });
         ftsIds = ftsResult.feedItemIds;
         if (ftsIds.length === 0) {
           // FTS returned no results, return empty
@@ -204,7 +209,7 @@ router.get('/stories', async (req, res) => {
     const items = await prisma.feedItem.findMany({
       where,
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
-      take: q && ftsIds ? ftsIds.length : candidateLimit,
+      take: q && ftsIds ? Math.min(ftsIds.length, FTS_RECALL_LIMIT) : candidateLimit,
       include: {
         source: {
           select: {

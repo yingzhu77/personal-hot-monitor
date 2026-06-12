@@ -26,6 +26,14 @@ vi.mock('../../db.js', () => ({
         const log = { id: `log-${mockHealthLogs.length + 1}`, ...data, error: data.error || null, checkedAt: new Date() };
         mockHealthLogs.push(log);
         return log;
+      }),
+      deleteMany: vi.fn(async ({ where }: { where?: { checkedAt?: { lt: Date } } } = {}) => {
+        if (where?.checkedAt?.lt) {
+          const before = mockHealthLogs.length;
+          mockHealthLogs = mockHealthLogs.filter(log => log.checkedAt >= where.checkedAt!.lt);
+          return { count: before - mockHealthLogs.length };
+        }
+        return { count: 0 };
       })
     },
     feedItem: {
@@ -146,5 +154,68 @@ describe('checker mutex', () => {
     await p1;
     expect(getCheckerStatus().running).toBe(false);
     expect(getCheckerStatus().startedAt).toBeNull();
+  });
+
+  test('expired health logs are cleaned up after check', async () => {
+    const { prisma } = await import('../../db.js');
+
+    // Pre-populate with old logs (40 days ago)
+    const oldDate = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+    mockHealthLogs.push(
+      { id: 'old-1', sourceId: 'src-1', status: 'healthy', error: null, checkedAt: oldDate },
+      { id: 'old-2', sourceId: 'src-1', status: 'failed', error: 'old error', checkedAt: oldDate }
+    );
+
+    const { runGamePulseCheck } = await import('../jobs/checker.js');
+    await runGamePulseCheck();
+
+    // Old logs should be cleaned up (deleteMany was called)
+    const deleteManyMock = vi.mocked(prisma.sourceHealthLog.deleteMany);
+    expect(deleteManyMock).toHaveBeenCalled();
+    // After cleanup, only the new log from this check should remain
+    expect(mockHealthLogs.length).toBe(1);
+    expect(mockHealthLogs[0].id).not.toBe('old-1');
+    expect(mockHealthLogs[0].id).not.toBe('old-2');
+  });
+
+  test('recent health logs are preserved after check', async () => {
+    // Pre-populate with recent logs (1 day ago)
+    const recentDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
+    mockHealthLogs.push(
+      { id: 'recent-1', sourceId: 'src-1', status: 'healthy', error: null, checkedAt: recentDate }
+    );
+
+    const { runGamePulseCheck } = await import('../jobs/checker.js');
+    await runGamePulseCheck();
+
+    // Recent log + new log from this check should both remain
+    expect(mockHealthLogs.length).toBe(2);
+    expect(mockHealthLogs.some(l => l.id === 'recent-1')).toBe(true);
+  });
+
+  test('cleanup respects HEALTH_LOG_RETENTION_DAYS env var', async () => {
+    const originalEnv = process.env.HEALTH_LOG_RETENTION_DAYS;
+    process.env.HEALTH_LOG_RETENTION_DAYS = '7';
+
+    try {
+      // Add a log from 10 days ago (should be cleaned with 7-day retention)
+      const oldDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+      mockHealthLogs.push(
+        { id: 'old-7d', sourceId: 'src-1', status: 'healthy', error: null, checkedAt: oldDate }
+      );
+
+      const { runGamePulseCheck } = await import('../jobs/checker.js');
+      await runGamePulseCheck();
+
+      // 10-day-old log should be cleaned with 7-day retention
+      expect(mockHealthLogs.length).toBe(1);
+      expect(mockHealthLogs[0].id).not.toBe('old-7d');
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.HEALTH_LOG_RETENTION_DAYS;
+      } else {
+        process.env.HEALTH_LOG_RETENTION_DAYS = originalEnv;
+      }
+    }
   });
 });

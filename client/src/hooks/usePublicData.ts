@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { PublicStats, Source, Story, StoryFacets } from '../services/api';
 import { publicApi } from '../services/api';
-import { subscribeToGames, onNewItem, onNotification, onReanalyzeProgress, onReanalyzeDone, onReanalyzeError } from '../services/socket';
+import { subscribeToGames, onNewItem, onNotification } from '../services/socket';
 import { summarizeHealth } from '../utils/stats';
 
 type ShowToast = (type: 'success' | 'error', message: string) => void;
@@ -134,20 +134,9 @@ export function usePublicData(showToast: ShowToast) {
     const offNotification = onNotification((notification) => {
       showToast(notification.importance === 'urgent' ? 'error' : 'success', notification.title.slice(0, 36));
     });
-    const offProgress = onReanalyzeProgress(() => {});
-    const offDone = onReanalyzeDone((result) => {
-      showToast('success', `重新分类完成：已分析 ${result.analyzed}，失败 ${result.failed}`);
-      void loadPublicData();
-    });
-    const offError = onReanalyzeError((error) => {
-      showToast('error', error.error);
-    });
     return () => {
       offItem();
       offNotification();
-      offProgress();
-      offDone();
-      offError();
     };
   }, [loadPublicData, showToast]);
 

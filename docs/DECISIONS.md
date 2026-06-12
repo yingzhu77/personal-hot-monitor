@@ -2,6 +2,89 @@
 
 本文档记录对长期维护有影响的项目决策。新增决策按时间倒序追加。
 
+## 2026-06-12：FTS 召回上限提升至 10000
+
+**决策**：将 FTS5 搜索的召回上限从 1000 提升至 10000（`FTS_RECALL_LIMIT`），覆盖广泛查询下的筛选漏召回问题。
+
+**原因**：
+- 原实现先取 1000 个 FTS 匹配 ID，再叠加 category/importance/visibility 等筛选。当 FTS 命中 >1000 且筛选目标分布在后段时，用户看到的结果不完整。
+- `/items` 端点的 `total` 原来用 Prisma `count({ where })`，在 FTS 场景下受 1000 ID 限制，显示不准确。
+- `/stories` 端点的 `candidateLimit` 在 FTS 场景下同样受限。
+
+**影响**：
+- `/items`：FTS 召回上限 10000，`total` 使用 Prisma 精确计数（已包含筛选条件）。
+- `/stories`：FTS 召回上限 10000，fetch `take` 使用 `min(ftsIds.length, FTS_RECALL_LIMIT)`。
+- 7 个新单元测试覆盖：limit 传递、total 返回、空查询、错误处理。
+- SQLite `IN` 子句 10000 个 ID 性能可接受（<50ms），无需改用 JOIN。
+
+## 2026-06-12：报告日期时区修正
+
+**决策**：日报/周报所有日期边界使用 `REPORT_TIMEZONE`（默认 `Asia/Shanghai`）计算，不依赖服务器本地时区。
+
+**原因**：
+- Docker 容器通常运行在 UTC，`new Date().toISOString().slice(0, 10)` 在 UTC+8 凌晨 0-8 点会返回前一天日期。
+- `setHours(0, 0, 0, 0)` 按服务器本地时区设置午夜，在 UTC 服务器上产生错误的查询范围。
+
+**技术方案**：
+- `todayStrInTz(tz)` — 用 `Intl.DateTimeFormat.formatToParts` 获取目标时区的今天日期字符串。
+- `startOfDayInTz(dateStr, tz)` — 计算目标时区午夜对应的 UTC 时间戳，处理正/负 UTC 偏移和跨日边界。
+- `endOfDayInTz(dateStr, tz)` — 午夜 + 24h - 1ms。
+- 前端 `ReportExportButton` 默认不强传日期，让后端按 `REPORT_TIMEZONE` 统一决定日报/周报边界；界面展示仍按默认 `Asia/Shanghai` 作为提示。
+
+**影响**：
+- 11 个新测试覆盖：UTC 服务器下 Asia/Shanghai 日期、负偏移时区（America/New_York）、午夜边界、日/周范围时长。
+- `.env` 新增 `REPORT_TIMEZONE` 可配置项。
+
+## 2026-06-12：SourceHealthLog 保留策略
+
+**决策**：在每次采集完成后自动清理过期的 SourceHealthLog 记录，默认保留 30 天，通过 `HEALTH_LOG_RETENTION_DAYS` 环境变量可配置。
+
+**原因**：
+- 每次 source check 为每个源写入一条日志，长期运行后表会无限增长。
+- 健康历史 API 只查最近 24 小时数据，更早的日志无业务价值。
+- 清理在采集流程末尾执行，不影响主流程性能。
+
+**影响**：
+- 新增 `cleanupExpiredHealthLogs()` 函数，复用 `MAX_FEED_ITEMS` 同类的 env 读取模式。
+- `docker-compose.yml` 和 `.env.production.example` 需补充 `HEALTH_LOG_RETENTION_DAYS` 说明。
+- 3 个新测试覆盖：过期日志清理、近期日志保留、自定义保留天数。
+
+## 2026-06-12：API 客户端统一 401 处理 + 运维脚本
+
+**决策**：
+1. `api.ts` 的 `request()` 函数在 401 响应时清除 token 并抛出 `UnauthorizedError`，前端 hook 统一捕获并回到登录态。
+2. 新增 `scripts/check-config.sh` 预检环境变量，`scripts/reset-admin-password.sh` 安全重置密码。
+3. `deployment-troubleshooting.md` 补充 .env 加载路径差异说明。
+
+**原因**：
+- 原实现各 catch 块独立处理错误，部分操作 token 过期只显示"保存失败"而非回到登录态。
+- 运维人员忘记密码或 .env 配置不全是最常见的部署问题，需要脚本和文档引导。
+
+**影响**：
+- `UnauthorizedError` 从 `api.ts` 导出，所有 admin 操作自动获得 401 处理。
+- 登录接口的 401（密码错误）不触发 session 清除，保持现有行为。
+- 运维脚本不打印敏感值，`reset-admin-password.sh` 自动备份旧 .env。
+
+## 2026-06-12：reanalyze-all 路由改为批量入队 + 原子化 Claim
+
+**决策**：
+1. `POST /reanalyze-all` 不再在请求 handler 中逐条执行分析，改为批量写入 `AnalysisTask` 表后立即返回。
+2. `claimNextTask` 从 find-then-update 改为 `updateMany` + `WHERE` 条件原子 claim。
+3. 队列 worker 对重分析任务使用 `force: true`，避免“入队成功但已有 completed 分析被跳过”。
+4. 前端移除 reanalyze WebSocket 事件监听，改为队列状态轮询。
+
+**原因**：
+- 原实现绕过持久化队列，进程重启丢失进度，与队列 worker 并发竞争。
+- find-then-update 的 claim 模式在并发场景下可能重复执行同一任务。
+- WebSocket 一次性事件在用户刷新页面后丢失，队列 polling 更可靠。
+
+**影响**：
+- `POST /reanalyze-all` 返回 `{ total, status: 'enqueued' }` 而非旧的进度事件。
+- `POST /items/:id/analyze` 也改为入队，返回 `{ status: 'enqueued', feedItemId }`。
+- 前端 `useAdmin` 不再维护 `reanalyzeProgress` 状态，AdminDrawer 移除进度卡片。
+- 新增 `reanalyzeItem()` 和 `reanalyzeAll()` 导出函数供 admin 路由使用。
+- 批量重分析跳过同一 feedItem 已有 pending/running 任务，减少重复队列噪声。
+
 ## 2026-06-12：日报/周报 Markdown 导出方案
 
 **决策**：先实现 Markdown 格式的日报/周报导出，暂不引入 PDF 导出。

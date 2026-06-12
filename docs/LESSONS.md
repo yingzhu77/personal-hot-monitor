@@ -571,6 +571,83 @@ END
 
 ---
 
+### 5.13 日期边界必须用目标时区计算
+
+**问题**：Docker 容器运行在 UTC，`new Date().toISOString().slice(0, 10)` 和 `setHours(0,0,0,0)` 在 UTC+8 凌晨 0-8 点返回前一天日期，导致日报/周报查询范围错误。
+
+**解决**：用 `Intl.DateTimeFormat.formatToParts` 获取目标时区的日期字符串，用 `Date.UTC` 减去本地时区秒数计算午夜对应的 UTC 时间戳。关键：当 UTC guess 在目标时区已过中午（`localH >= 12`），需要先加 24 小时再重算偏移，避免减法溢出到前一天。
+
+**规则**：
+- 涉及"今天"、"本周"等自然语言日期的查询，必须用目标时区而非服务器时区。
+- `Intl.DateTimeFormat` 的 `hourCycle: 'h23'` 保证 0-23 范围，避免 `hour12: false` 产生 "24" 的歧义。
+- 测试必须覆盖正偏移（+8）和负偏移（-4/-5）两种场景。
+
+---
+
+### 5.14 日志表保留策略
+
+**问题**：每次 source check 写入一条 SourceHealthLog，长期运行后表无限增长，占用磁盘且拖慢查询。
+
+**解决**：在采集流程末尾自动清理过期记录，保留天数通过环境变量配置。清理逻辑放在主流程之后，不影响采集性能。
+
+**规则**：
+- 任何按时间累积的日志表都需要保留策略，不要让数据无限增长。
+- 清理操作放在主流程末尾（try/finally 之外），避免清理失败影响主业务。
+- 保留天数用环境变量配置，有合理默认值（30 天），方便运维调整。
+- 清理日志用 `console.log` 记录清理数量，方便排查。
+
+---
+
+### 5.15 API 层统一 401 处理
+
+**问题**：每个 admin API 调用的 catch 块各自处理错误，token 过期时部分操作能正确回到登录态，部分只显示"保存失败"等误导信息。
+
+**解决**：在 `request()` 函数中检测 401 响应，清除 localStorage token 并抛出自定义 `UnauthorizedError`；前端 hook 统一检查该错误类型并调用 `clearAdminSession()`。
+
+**规则**：
+- 401 处理应在 API 客户端层统一完成，不要分散到每个业务操作的 catch 中。
+- 登录接口的 401 是"密码错误"，不应触发 session 清除——登录接口单独处理。
+- token 清除 + 状态重置 + toast 提示应在同一个 call site 完成，避免竞态。
+
+---
+
+### 5.16 批量操作必须走持久化队列
+
+**问题**：`reanalyze-all` 路由直接在请求处理循环中逐条调用 `ensureAnalysis()`，绕过 `AnalysisTask` 表。导致：无任务记录、无重试机制、进程重启丢失进度、与队列 worker 并发竞争。
+
+**解决**：所有分析操作（单条重分析、批量重分析、失败重试）统一通过 `enqueueAnalysisTask` / `reanalyzeAll` 写入 `AnalysisTask` 表，由后台 worker 统一消费。
+
+**规则**：
+- 任何需要"排队执行"的操作，都必须通过持久化队列，不要在请求 handler 中直接执行。
+- 进度追踪改用队列状态轮询（前端 polling `getAnalysisQueueOverview`），不依赖一次性 WebSocket 事件。
+
+---
+
+### 5.17 任务 Claim 必须原子化
+
+**问题**：`claimNextTask` 先 `findFirst` 再 `update`，两步之间其他 worker 可能已经 claim 了同一任务，导致重复执行。
+
+**解决**：用 `updateMany` + `WHERE status='pending'` 原子 claim——只有 `count > 0` 时才认为 claim 成功，然后 `findUnique` 拿回完整记录。
+
+**规则**：
+- 任务状态流转（pending → running）必须是原子操作，不要 find-then-update。
+- SQLite 单写入者场景下 `updateMany` + WHERE 已足够；多写入者场景需要 `SELECT ... FOR UPDATE` 或类似机制。
+
+---
+
+### 5.18 配置检查脚本不要 source .env
+
+**问题**：运维预检脚本如果直接 `source .env`，`.env` 中的特殊字符、未加引号的密码或非 shell 格式内容可能导致解析失败；更严重时，恶意内容会被当作 shell 代码执行。
+
+**解决**：配置检查脚本只按文本解析指定 key 的 `KEY=value`，不执行 `.env` 文件内容。脚本只读取需要验证的字段，例如 `ADMIN_PASSWORD`、`ADMIN_JWT_SECRET`、`AI_PROVIDER` 和对应 API key。
+
+**规则**：
+- 读取 `.env` 做检查时，不要用 `source`。
+- 密码和 token 这类值要允许特殊字符；脚本不能因为 `=`, 空格或 shell 元字符直接坏掉。
+- 预检脚本只输出缺失/弱配置，不输出敏感值。
+
+---
+
 ## 六、Prompt 模板（可复用）
 
 ### Bug 修复
@@ -607,3 +684,7 @@ END
 | 2026-06-09 | 重构为跨项目可复用格式，分离项目特定内容到 AGENTS.md |
 | 2026-06-12 | 补充 SQLite 备份恢复、源健康历史、定时任务互斥锁经验 |
 | 2026-06-12 | 补充 SQLite FTS5 全文搜索实现要点 |
+| 2026-06-12 | 补充批量操作必须走持久化队列、任务 Claim 原子化经验 |
+| 2026-06-12 | 补充 API 层统一 401 处理经验 |
+| 2026-06-12 | 补充日志表保留策略经验 |
+| 2026-06-12 | 补充配置检查脚本不要 source .env 的运维经验 |

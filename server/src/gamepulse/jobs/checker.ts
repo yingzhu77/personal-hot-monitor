@@ -25,6 +25,27 @@ function getMaxFeedItems(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 2000;
 }
 
+// Health log retention period in days (configurable via env)
+function getHealthLogRetentionDays(): number {
+  const parsed = Number(process.env.HEALTH_LOG_RETENTION_DAYS);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 30;
+}
+
+// Clean up expired health logs
+async function cleanupExpiredHealthLogs(): Promise<number> {
+  const retentionDays = getHealthLogRetentionDays();
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+  const result = await prisma.sourceHealthLog.deleteMany({
+    where: { checkedAt: { lt: cutoff } }
+  });
+
+  if (result.count > 0) {
+    console.log(`[GamePulse] Cleaned up ${result.count} health logs older than ${retentionDays} days`);
+  }
+  return result.count;
+}
+
 // Clean up old feed items when limit is exceeded
 async function cleanupOldItems(): Promise<number> {
   const maxItems = getMaxFeedItems();
@@ -90,8 +111,9 @@ async function doRunGamePulseCheck(io?: Server): Promise<CheckResult> {
 
   const results = await runWithConcurrency(sources, getSourceCheckConcurrency(), source => checkSource(source, io));
 
-  // Cleanup old items after check
-  const deletedCount = await cleanupOldItems();
+  // Cleanup old items and expired health logs after check
+  await cleanupOldItems();
+  await cleanupExpiredHealthLogs();
 
   return {
     checkedSources: sources.length,
