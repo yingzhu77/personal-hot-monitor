@@ -497,6 +497,80 @@ if (ftsReady) {
 
 ---
 
+### 5.11 FTS5 触发器删除命令的 SQLite 构建差异
+
+**问题**：FTS5 的 `INSERT INTO fts(fts, ...) VALUES('delete', ...)` 命令在某些 SQLite 构建中失败（包括 Node.js 内置的 `node:sqlite`），报 `SQL logic error`。
+
+**根因**：FTS5 'delete' 命令在非 content-less 表上的行为依赖 SQLite 编译选项和版本。`node:sqlite`（Node.js 24）的 SQLite 构建不支持此命令，而 Docker 容器中的系统 SQLite 通常支持。
+
+**解决**：在触发器中使用 `DELETE FROM fts WHERE rowid IN (SELECT rowid FROM fts WHERE feedItemId = old.id)` 替代 FTS5 'delete' 命令。这种方式通过标准 SQL DELETE 操作，不依赖 FTS5 特殊命令，在所有 SQLite 构建中都能工作。
+
+**实现**：
+```sql
+-- ❌ 不可靠：FTS5 'delete' 命令
+CREATE TRIGGER FeedItem_ad AFTER DELETE ON FeedItem BEGIN
+  INSERT INTO FeedItemFTS(FeedItemFTS, feedItemId, ...)
+  VALUES('delete', old.id, ...);
+END
+
+-- ✅ 可靠：标准 SQL DELETE
+CREATE TRIGGER FeedItem_ad AFTER DELETE ON FeedItem BEGIN
+  DELETE FROM FeedItemFTS WHERE rowid IN (
+    SELECT rowid FROM FeedItemFTS WHERE feedItemId = old.id
+  );
+END
+```
+
+**规则**：
+- FTS5 触发器中的删除操作优先用 `DELETE FROM ... WHERE rowid IN (SELECT ...)` 而不是 FTS5 'delete' 命令
+- 更新触发器 = 删除旧条目 + 插入新条目
+- `ensureFTS5()` 应先 DROP 旧触发器再 CREATE，确保 SQL 变更生效
+- 集成测试中 FTS5 MATCH 查询对特殊字符（如 `.`）需要用引号包裹短语
+
+---
+
+### 5.12 ensureFTS5 必须检查触发器完整性
+
+**问题**：`ensureFTS5()` 只检查 FTS5 虚拟表是否存在就返回，导致触发器缺失或损坏时无法自愈。
+
+**根因**：表存在 ≠ 触发器存在。迁移、手动操作或部分失败都可能导致表在但触发器缺失。
+
+**解决**：分别检查虚表和每个触发器（`FeedItem_ai`、`FeedItem_ad`、`FeedItem_au`），缺失时自动补齐并重建索引。
+
+**规则**：
+- `ensureFTS5()` 必须独立检查每个触发器，不能只检查表
+- `isFTS5Ready()` 也应检查触发器完整性，返回 false 提示需要修复
+- 触发器修复后必须重建 FTS 索引（数据可能已不同步）
+
+---
+
+### 5.10 Stale-First API 模式：先返回快照，后台异步刷新
+
+**问题**：API 在数据过期时阻塞等待完整刷新（30-60s），导致首屏长时间空白。
+
+**根因**：路由 handler 用 `await refreshCommunityData()` 同步等待，所有并发请求共享同一个 Promise（去重），但第一个请求仍需等待全部完成。
+
+**解决**：stale-first 模式——始终立即返回数据库快照，过期时 fire-and-forget 触发后台刷新：
+```
+1. getStalenessInfo() — O(1) 查询判断数据是否过期
+2. 立即返回 DB 快照（或空数组）
+3. isStale 时 fire-and-forget refreshCommunityData()（已内置 fetchPromise 去重）
+4. 响应中携带 isRefreshing / isStale 字段
+5. 前端收到 isRefreshing=true 时轮询获取更新数据
+```
+
+**关键设计**：
+- `refreshCommunityData()` 内部已有 `fetchPromise` 并发锁，多个请求不会触发重复刷新
+- 前端通过 `isRefreshing` 字段驱动轮询，而非自行判断时间间隔
+- 保持 `stale` 字段向后兼容，新增 `isStale` + `isRefreshing` 语义更清晰
+
+**规则**：
+- 任何耗时 >2s 的数据刷新都不应阻塞首屏响应
+- 优先返回 DB 快照 + 后台刷新，而非等待最新数据
+- 并发控制由服务端保证（Promise 去重），前端只需关心状态字段
+
+---
+
 ## 六、Prompt 模板（可复用）
 
 ### Bug 修复
