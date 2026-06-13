@@ -6,7 +6,7 @@ cd /app/server
 # Run database migrations
 echo "Running database migrations..."
 npx prisma generate
-npx prisma db push --skip-generate
+npx prisma db push --skip-generate --accept-data-loss
 
 # Start the server
 echo "Starting Game Pulse server..."
